@@ -1,0 +1,8 @@
+{
+  "approved_by": "Agronómus neve",
+  "approved_on": "2026-10-20",
+  "values": {
+    "spray.max_gust_ms": 6,
+    "tillage.bad_subsoil_pct": 38
+  }
+}
