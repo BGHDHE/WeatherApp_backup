@@ -215,6 +215,7 @@ def build_location_observation(
     location: Location,
     method: str,
     selected: list[tuple[Station, float]],
+    wind_selected: list[tuple[Station, float]],
     data: dict[str, dict[datetime, Obs]],
 ) -> LocationObservation:
     series = {s.id: data[s.id] for s, _ in selected if data.get(s.id)}
@@ -227,10 +228,21 @@ def build_location_observation(
         for s, distance in selected
         if s.id in series
     ]
+    wind_series = {s.id: data[s.id] for s, _ in wind_selected if data.get(s.id)}
+    wind_refs = [
+        StationRef(
+            name=s.name,
+            distance_km=round(distance, 1),
+            observed_at=max(data[s.id]) if data.get(s.id) else None,
+        )
+        for s, distance in wind_selected
+        if s.id in wind_series
+    ]
     empty = dict(
         name=location.name,
         slug=location.slug,
         stations=refs,
+        wind_stations=wind_refs,
         latest_time=None,
         latest_temp_c=None,
         latest_humidity_percent=None,
@@ -254,12 +266,15 @@ def build_location_observation(
 
     distances = {s.id: d for s, d in selected}
     merged = _interpolate(series, distances)
+    wind_distances = {s.id: d for s, d in wind_selected if s.id in wind_series}
+    wind_merged = _interpolate(wind_series, wind_distances)
     latest = max(merged)
     past = {ts: v for ts, v in merged.items() if latest - timedelta(hours=24) < ts <= latest}
     midnight_local = to_local(latest).replace(hour=0, minute=0, second=0, microsecond=0)
     midnight = midnight_local - local_offset(latest)
     midnight = midnight.replace(tzinfo=timezone.utc)
     today = {ts: v for ts, v in merged.items() if ts >= midnight}
+    wind_today = {ts: v for ts, v in wind_merged.items() if ts >= midnight}
 
     def precip_sum(window: dict[datetime, dict[str, float | None]], start: datetime) -> float | None:
         expected = int((latest - start) / timedelta(minutes=10))
@@ -271,9 +286,9 @@ def build_location_observation(
     today_temps = _present(v["temp"] for v in today.values())
     today_min = min(today_temps) if today_temps else None
     past_temps = _present(v["temp"] for v in past.values())
-    gusts = [(v["gust"], ts) for ts, v in today.items() if v["gust"] is not None]
+    gusts = [(v["gust"], ts) for ts, v in wind_today.items() if v["gust"] is not None]
     gust_max = max(gusts, key=lambda pair: pair[0]) if gusts else None
-    winds = [(v["wind"], ts) for ts, v in today.items() if v["wind"] is not None]
+    winds = [(v["wind"], ts) for ts, v in wind_today.items() if v["wind"] is not None]
     wind_max = max(winds, key=lambda pair: pair[0]) if winds else None
     past_gusts = _present(v["gust"] for v in past.values())
     now_values = merged[latest]
@@ -291,7 +306,7 @@ def build_location_observation(
         today_temp_max_c=_r(max(today_temps)) if today_temps else None,
         precip_today_mm=_r(precip_sum(today, midnight)),
         wind_max_ms=_r(wind_max[0]) if wind_max else None,
-        wind_direction=compass(today[wind_max[1]]["wind_dir"]) if wind_max else None,
+        wind_direction=compass(wind_today[wind_max[1]]["wind_dir"]) if wind_max else None,
         gust_max_ms=_r(gust_max[0]) if gust_max else None,
         gust_time=f"{to_local(gust_max[1]):%H:%M}" if gust_max else None,
         frost_level=frost_level(today_min),
@@ -321,7 +336,38 @@ def build_observations(
         for slug in region.location_slugs:
             location = by_slug[slug]
             method, selected = select_stations(location, usable)
-            items.append(build_location_observation(location, method, selected, fresh))
+            selected_latest = max(
+                (max(fresh[s.id]) for s, _ in selected if fresh.get(s.id)),
+                default=newest,
+            )
+            local_date = to_local(selected_latest).date() if selected_latest else to_local(fetched_at).date()
+
+            def has_wind_data(station: Station) -> bool:
+                return any(
+                    to_local(ts).date() == local_date
+                    and (observation.wind is not None or observation.gust is not None)
+                    for ts, observation in fresh.get(station.id, {}).items()
+                )
+
+            wind_selected = [(station, distance) for station, distance in selected if has_wind_data(station)]
+            if not wind_selected:
+                nearby_reporting = [
+                    (station, distance)
+                    for station in usable
+                    if (distance := haversine_km(
+                        location.latitude,
+                        location.longitude,
+                        station.latitude,
+                        station.longitude,
+                    )) <= NEAREST_RADIUS_KM
+                    and has_wind_data(station)
+                ]
+                if nearby_reporting:
+                    wind_selected = [min(nearby_reporting, key=lambda pair: pair[1])]
+
+            items.append(
+                build_location_observation(location, method, selected, wind_selected, fresh)
+            )
         region_items.append(RegionObservation(name=region.name, slug=region.slug, locations=items))
     local_newest = to_local(newest) if newest else None
     return ObservationResponse(

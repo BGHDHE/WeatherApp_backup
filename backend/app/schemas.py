@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Location(BaseModel):
@@ -189,6 +189,7 @@ class LocationObservation(BaseModel):
     slug: str
     method: Literal["interpoláció", "legközelebbi állomás", "nincs adat"]
     stations: list[StationRef]
+    wind_stations: list[StationRef] = Field(default_factory=list)
     latest_time: datetime | None
     latest_temp_c: float | None
     latest_humidity_percent: float | None

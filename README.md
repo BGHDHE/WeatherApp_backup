@@ -45,11 +45,31 @@ python -m pytest
 
 ## Futtatás Dockerrel
 
-```
+```powershell
 docker compose up --build
 ```
 
-Az alkalmazás a http://localhost:8080 címen érhető el (Nginx: `/api` → backend, a többi → SvelteKit). Éles környezetben állítsd be a `PUBLIC_ORIGIN` környezeti változót a publikus URL-re (HTTPS-sel). A Docker-képek ebben a környezetben nem voltak kipróbálhatók (a Docker nincs telepítve), a frontend `adapter-node` build-je viszont ellenőrzött.
+Az alkalmazás helyben a http://localhost:8080 címen érhető el (Nginx: `/api` → backend, a többi → SvelteKit). A port alapértelmezés szerint csak a localhoston figyel; ha más gépről is el kell érni, állítsd a `HTTP_BIND` értékét `0.0.0.0`-ra.
+
+### Éles deploy Cloudflare Tunnel-lel
+
+1. A Cloudflare Zero Trust felületén hozz létre egy Cloudflare Tunnel-t, és válaszd a Docker telepítési módot. Másold ki a tunnel tokent.
+2. Másold a `.env.example` fájlt `.env` néven (`Copy-Item .env.example .env`), majd állítsd be benne a `CLOUDFLARE_TUNNEL_TOKEN` tokent és a `PUBLIC_ORIGIN` értékét a publikus HTTPS-címre (például `https://idojaras.example.com`). A `.env` fájl nem kerül Gitbe.
+3. A Cloudflare Tunnel publikus hostname útvonalánál állítsd be a domainnevet, célként pedig ezt: `http://nginx:80`. A `nginx` a Docker Compose belső hálózatán érhető el, nem kell hozzá külön nyilvános port.
+4. Indítsd el az alkalmazást és a tunnelt:
+
+```powershell
+docker compose --profile cloudflare up --build -d
+```
+
+Ellenőrzés:
+
+```powershell
+docker compose --profile cloudflare ps
+docker compose logs -f cloudflared
+```
+
+A Tunnel profil használatakor a `cloudflared` szolgáltatás a Compose-hálózaton keresztül éri el az Nginxet. A hoston közzétett `8080`-as port alapból csak localhostról érhető el, így a publikus forgalom a Cloudflare Tunnelön halad át. Az éles URL-t a `.env` `PUBLIC_ORIGIN` értékével kell egyeztetni a SvelteKit origin-ellenőrzéséhez. A Docker-konténerek ebben a környezetben nem futtathatók, a frontend `adapter-node` build-je viszont ellenőrzött.
 
 ## CI
 
@@ -80,5 +100,7 @@ A `/napi` oldalon a „Mért állomásadat” nézet a HungaroMet ODP automata �
 mutatja (`GET /api/observations`). A backend 5 percenként ellenőrzi az ODP `now/` könyvtárlistáját, és csak
 azokat az állomásfájlokat tölti le újra, amelyeknek megváltozott a feltöltési időpontja. Településenként: ha
 10 km-en belül legalább két állomás van, távolsággal súlyozott (1/d²) interpoláció; egyébként a legközelebbi
-állomás (legfeljebb 20 km). A csapadékösszeg csak elegendő (80%) lefedettségnél jelenik meg, a magassági
-különbségeket nem korrigáljuk. Ha az ODP nem érhető el, az utolsó mentett válasz jön `stale` jelzéssel.
+állomás (legfeljebb 20 km). Ha a kiválasztott állomás(ok)on aznap nincs szélmérés, a szélhez külön a
+legközelebbi, aznap széladatot szolgáltató, legfeljebb 20 km-re lévő állomást használjuk; ezt a felület külön
+megjelöli. A csapadékösszeg csak elegendő (80%) lefedettségnél jelenik meg, a magassági különbségeket nem
+korrigáljuk. Ha az ODP nem érhető el, az utolsó mentett válasz jön `stale` jelzéssel.

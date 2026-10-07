@@ -152,6 +152,7 @@ export interface LocationObservation {
   slug: string;
   method: "interpoláció" | "legközelebbi állomás" | "nincs adat";
   stations: StationRef[];
+  wind_stations: StationRef[];
   latest_time: string | null;
   latest_temp_c: number | null;
   latest_humidity_percent: number | null;

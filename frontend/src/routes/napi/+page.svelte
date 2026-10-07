@@ -76,14 +76,16 @@
     return `${dir}${num(l.wind_max_ms, "m/s")}${gust}`;
   }
 
-  const timeFormatter = new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" });
-
-  function obsWind(l: LocationObservation): string {
-    if (l.wind_max_ms === null) return NA;
-    const dir = l.wind_direction ? `${l.wind_direction} ` : "";
-    const gust = l.gust_max_ms === null ? "" : ` (széllökés: ${num(l.gust_max_ms, "m/s")}${l.gust_time ? `, ${l.gust_time}` : ""})`;
-    return `${dir}${num(l.wind_max_ms, "m/s")}${gust}`;
+  function getModelLocation(slug: string): LocationDaily | null {
+    if (!report) return null;
+    for (const region of report.regions) {
+      const loc = region.locations.find((l) => l.slug === slug);
+      if (loc) return loc;
+    }
+    return null;
   }
+
+  const timeFormatter = new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" });
 
   function latest(l: LocationObservation): string {
     if (l.latest_temp_c === null) return NA;
@@ -145,8 +147,7 @@
           <p class="stale-note" role="status">A forrás most nem érhető el, az utoljára mentett adatokat látod.</p>
         {/if}
         <div class="provenance">
-          <span class="source-pill"><span aria-hidden="true">●</span> Mért adat</span>
-          <span>Forrás: HungaroMet ODP, automata állomások (10 perces)</span>
+          <span>Forrás: HungaroMet ODP</span>
           {#if observed.as_of}<span>Legfrissebb mérés: {timeFormatter.format(new Date(observed.as_of))}</span>{/if}
         </div>
 
@@ -155,6 +156,7 @@
             <h2 id="o-{region.slug}" class="daily-region-title">{region.name}</h2>
             <div class="daily-grid">
               {#each region.locations as l (l.slug)}
+                {@const modelLoc = getModelLocation(l.slug)}
                 <article class="daily-card">
                   <h3>{l.name}</h3>
                   {#if l.method === "nincs adat"}
@@ -164,13 +166,13 @@
                       {l.method === "interpoláció" ? "Interpolált érték" : "Legközelebbi állomás"}: {stationList(l)}
                     </p>
                     <dl>
-                      <div><dt>Legfrissebb mérés</dt><dd>{latest(l)}</dd></div>
-                      <div><dt>Hőmérséklet, mért (24 h)</dt><dd>{range(l.past_temp_min_c, l.past_temp_max_c)}</dd></div>
-                      <div><dt>Hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>
-                      <div><dt>Csapadék, mért (24 h)</dt><dd>{num(l.past_precip_mm, "mm")}</dd></div>
-                      <div><dt>Csapadék ma</dt><dd>{num(l.precip_today_mm, "mm")}</dd></div>
-                      <div><dt>Szél ma</dt><dd>{obsWind(l)}</dd></div>
-                      <div class="frost-line"><dt>Fagy (mért minimum)</dt><dd class={frostClass(l.frost_level)}>{frost(l)}</dd></div>
+                      <div class="frost-line"><dt>Legfrissebb mérés</dt><dd>{latest(l)}</dd></div>
+                      <div class="frost-line"><dt>Hőmérséklet, mért (24 h)</dt><dd>{range(l.past_temp_min_c, l.past_temp_max_c)}</dd></div>
+                      <div class="frost-line"><dt>Hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>
+                      <div class="frost-line"><dt>Csapadék, mért (24 h)</dt><dd>{num(l.past_precip_mm, "mm")}</dd></div>
+                      <div class="frost-line"><dt>Csapadék ma</dt><dd>{num(l.precip_today_mm, "mm")}</dd></div>
+                      <div class="frost-line"><dt>Szél</dt><dd>{modelLoc ? wind(modelLoc) : NA}</dd></div>
+                      <div class="frost-line"><dt>Fagy</dt><dd class={frostClass(l.frost_level)}>{frost(l)}</dd></div>
                     </dl>
                   {/if}
                 </article>
@@ -179,10 +181,6 @@
           </section>
         {/each}
       {/if}
-    {/if}
-
-    {#if view === "measured"}
-      <!-- mért nézet fent -->
     {:else if loading}
       <p class="status-panel" role="status">Napi jelentés betöltése…</p>
     {:else if error}
@@ -195,7 +193,6 @@
         <p class="stale-note" role="status">A forrás most nem érhető el, az utoljára mentett adatokat látod.</p>
       {/if}
       <div class="provenance">
-        <span class="source-pill"><span aria-hidden="true">●</span> Modelladat</span>
         <span>Forrás: Open-Meteo</span>
         <span>Frissítve: {updatedFormatter.format(new Date(report.fetched_at))}</span>
       </div>
@@ -208,15 +205,15 @@
               <article class="daily-card">
                 <h3>{l.name}</h3>
                 <dl>
-                  <div><dt>Modellezett hőmérséklet (24 h)</dt><dd>{range(l.past_temp_min_c, l.past_temp_max_c)}</dd></div>
-                  <div><dt>Várható hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>
-                  <div><dt>Csapadék, modellezett (24 h)</dt><dd>{num(l.past_precip_mm, "mm")}</dd></div>
-                  <div><dt>Csapadék, várható ma</dt><dd>{rain(l)}</dd></div>
-                  <div><dt>Szél</dt><dd>{wind(l)}</dd></div>
+                  <div class="frost-line"><dt>Modellezett hőmérséklet (24 h)</dt><dd>{range(l.past_temp_min_c, l.past_temp_max_c)}</dd></div>
+                  <div class="frost-line"><dt>Várható hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>
+                  <div class="frost-line"><dt>Csapadék, modellezett (24 h)</dt><dd>{num(l.past_precip_mm, "mm")}</dd></div>
+                  <div class="frost-line"><dt>Csapadék, várható ma</dt><dd>{rain(l)}</dd></div>
+                  <div class="frost-line"><dt>Szél</dt><dd>{wind(l)}</dd></div>
                   <div class="frost-line"><dt>Fagyveszély</dt><dd class={frostClass(l.frost_level)}>{frost(l)}</dd></div>
-                  <div><dt>Talajhőmérséklet (6 cm)</dt><dd>{num(l.soil_temperature_c, "°C", 0)}</dd></div>
-                  <div><dt>Talajnedvesség</dt><dd>{num(l.soil_moisture_percent, "%", 0)}</dd></div>
-                  <div><dt>Párolgás</dt><dd>{num(l.evapotranspiration_mm, "mm/nap")}</dd></div>
+                  <div class="frost-line"><dt>Talajhőmérséklet (6 cm)</dt><dd>{num(l.soil_temperature_c, "°C", 0)}</dd></div>
+                  <div class="frost-line"><dt>Talajnedvesség</dt><dd>{num(l.soil_moisture_percent, "%", 0)}</dd></div>
+                  <div class="frost-line"><dt>Párolgás</dt><dd>{num(l.evapotranspiration_mm, "mm/nap")}</dd></div>
                 </dl>
               </article>
             {/each}

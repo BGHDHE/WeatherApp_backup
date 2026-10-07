@@ -99,6 +99,33 @@ def test_precipitation_sums_and_wind_extremes():
     assert result.today_temp_min_c == 10.0
 
 
+def test_wind_uses_nearest_reporting_station_when_closest_has_no_wind_data():
+    nearest = Station("a", "A", 47.70, 19.80)
+    wind_station = Station("b", "B", 47.82, 19.80)
+    result = run(
+        [nearest, wind_station],
+        {
+            "a": series(temp=10.0, wind=None, wind_dir=None, gust=None),
+            "b": series(temp=20.0, wind=6.0, wind_dir=270.0, gust=11.0),
+        },
+    )
+
+    assert result.latest_temp_c == 10.0
+    assert result.wind_max_ms == 6.0 and result.wind_direction == "Ny"
+    assert result.gust_max_ms == 11.0
+    assert [station.name for station in result.wind_stations] == ["B"]
+
+    too_far = Station("c", "C", 48.0, 19.80)
+    far_result = run(
+        [nearest, too_far],
+        {
+            "a": series(temp=10.0, wind=None, wind_dir=None, gust=None),
+            "c": series(temp=20.0, wind=8.0, wind_dir=270.0, gust=12.0),
+        },
+    )
+    assert far_result.wind_max_ms is None
+
+
 def test_precipitation_is_none_when_coverage_is_poor_but_temperature_stays():
     a = Station("a", "A", 47.70, 19.80)
     sparse = {ts: o for i, (ts, o) in enumerate(series().items()) if i % 4 == 0 or ts == LATEST}

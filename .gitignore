@@ -8,3 +8,5 @@ node_modules/
 build/
 data/
 *.sqlite3
+.env
+!.env.example
