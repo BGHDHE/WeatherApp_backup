@@ -125,8 +125,4 @@
       </div>
     {/if}
   </main>
-
-  <footer>
-    Modelladat, nem helyi állomásmérés; a térségi értékek a térség településeinek szélsőértékei. A figyelmeztetések általános tájékoztatást adnak.
-  </footer>
 </div>

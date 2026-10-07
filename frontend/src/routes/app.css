@@ -166,3 +166,7 @@ footer { padding: 19px 0 23px; border-top: 1px solid #e3e9e3; color: #8a958d; fo
 .tip-threshold { margin: 0; padding-top: 8px; border-top: 1px solid #eef2ef; color: #58685f; font-size: 12px; }
 .tip-threshold span { display: block; color: #89948d; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .fw-table .dot-btn { border: 0; font-family: inherit; }
+.view-switch { display: inline-flex; margin: 0 0 16px; padding: 3px; border-radius: 999px; background: #e8efe9; }
+.view-switch button { padding: 7px 16px; border: 0; border-radius: 999px; color: #35664e; background: transparent; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
+.view-switch button.active { color: #fff; background: #174b38; }
+.station-note { margin: 0 0 10px; color: #58685f; font-size: 12px; }

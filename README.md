@@ -73,3 +73,12 @@ Módosítás: másold a `backend/thresholds.example.json` fájlt `backend/data/t
 (vagy add meg a `THRESHOLDS_FILE` környezeti változót), írd át az értékeket, töltsd ki az `approved_by`
 és `approved_on` mezőt, majd indítsd újra a backendet. Az ismeretlen vagy érvénytelen kulcsok az alapértéket kapják.
 Dockerben a `data/` kötet (`snapshots:/app/data`) a fájlt is megőrzi.
+
+## Mért állomásadatok (napi kimutatás)
+
+A `/napi` oldalon a „Mért állomásadat” nézet a HungaroMet ODP automata állomásainak 10 perces adatait
+mutatja (`GET /api/observations`). A backend 5 percenként ellenőrzi az ODP `now/` könyvtárlistáját, és csak
+azokat az állomásfájlokat tölti le újra, amelyeknek megváltozott a feltöltési időpontja. Településenként: ha
+10 km-en belül legalább két állomás van, távolsággal súlyozott (1/d²) interpoláció; egyébként a legközelebbi
+állomás (legfeljebb 20 km). A csapadékösszeg csak elegendő (80%) lefedettségnél jelenik meg, a magassági
+különbségeket nem korrigáljuk. Ha az ODP nem érhető el, az utolsó mentett válasz jön `stale` jelzéssel.

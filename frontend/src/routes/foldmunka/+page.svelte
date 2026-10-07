@@ -152,11 +152,4 @@
       <p class="tip-threshold"><span>Küszöb</span> {tipState.threshold}</p>
     </div>
   {/if}
-
-  <footer>
-    Modelladat, nem helyszíni talajmérés. Felső réteg: 0-7 cm, alsó réteg: 7-28 cm talajnedvesség (térfogat%),
-    a talajhőmérséklet 6 cm mélységű. Az egyes cellák fölé víve (érintésre tartva) megjelenik az ok és a küszöb.
-    A jelzések általános időjárási feltételek, nem kultúra-, talajtípus-, szer- vagy gépspecifikus ajánlások, a
-    küszöbök kezdeti becslések, agronómussal jóváhagyandók.
-  </footer>
 </div>

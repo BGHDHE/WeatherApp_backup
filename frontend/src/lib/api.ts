@@ -1,4 +1,4 @@
-import type { DailyResponse, FieldworkResponse, OutlookResponse, ThresholdsResponse } from "$lib/types";
+import type { DailyResponse, FieldworkResponse, ObservationResponse, OutlookResponse, ThresholdsResponse } from "$lib/types";
 
 export async function fetchOutlook(days = 7): Promise<OutlookResponse> {
   const response = await fetch(`/api/outlook?days=${days}`);
@@ -29,4 +29,12 @@ export async function fetchThresholds(): Promise<ThresholdsResponse> {
     throw new Error(`API hiba (${response.status})`);
   }
   return response.json() as Promise<ThresholdsResponse>;
+}
+
+export async function fetchObservations(): Promise<ObservationResponse> {
+  const response = await fetch("/api/observations");
+  if (!response.ok) {
+    throw new Error(`API hiba (${response.status})`);
+  }
+  return response.json() as Promise<ObservationResponse>;
 }

@@ -177,3 +177,49 @@ class ThresholdsResponse(BaseModel):
     approved_by: str | None
     approved_on: str | None
     thresholds: list[ThresholdItem]
+
+class StationRef(BaseModel):
+    name: str
+    distance_km: float
+    observed_at: datetime | None
+
+
+class LocationObservation(BaseModel):
+    name: str
+    slug: str
+    method: Literal["interpoláció", "legközelebbi állomás", "nincs adat"]
+    stations: list[StationRef]
+    latest_time: datetime | None
+    latest_temp_c: float | None
+    latest_humidity_percent: float | None
+    latest_wind_ms: float | None
+    past_temp_min_c: float | None
+    past_temp_max_c: float | None
+    past_precip_mm: float | None
+    past_gust_max_ms: float | None
+    today_temp_min_c: float | None
+    today_temp_max_c: float | None
+    precip_today_mm: float | None
+    wind_max_ms: float | None
+    wind_direction: str | None
+    gust_max_ms: float | None
+    gust_time: str | None
+    frost_level: Literal["nincs adat", "nincs", "alacsony", "mérsékelt", "magas"]
+    frost_min_temp_c: float | None
+
+
+class RegionObservation(BaseModel):
+    name: str
+    slug: str
+    locations: list[LocationObservation]
+
+
+class ObservationResponse(BaseModel):
+    provider: Literal["odp.met.hu"]
+    source_type: Literal["observation"]
+    fetched_at: datetime
+    timezone: str
+    date: date
+    as_of: datetime | None
+    regions: list[RegionObservation]
+    stale: bool = False

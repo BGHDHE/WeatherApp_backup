@@ -1,20 +1,48 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { fetchDaily } from "$lib/api";
-  import type { DailyResponse, LocationDaily } from "$lib/types";
+  import { fetchDaily, fetchObservations } from "$lib/api";
+  import type { DailyResponse, LocationDaily, LocationObservation, ObservationResponse } from "$lib/types";
 
   let report: DailyResponse | null = $state(null);
   let loading = $state(true);
   let error = $state("");
+  let view: "model" | "measured" = $state("measured");
+  let observed: ObservationResponse | null = $state(null);
+  let obsLoading = $state(false);
+  let obsError = $state("");
 
   const dateFormatter = new Intl.DateTimeFormat("hu-HU", {
     year: "numeric", month: "long", day: "numeric", weekday: "long",
   });
   const updatedFormatter = new Intl.DateTimeFormat("hu-HU", { dateStyle: "short", timeStyle: "short" });
 
+  const REFRESH_MS = 5 * 60 * 1000;
+
   onMount(() => {
+    void loadObserved();
     void load();
+    const timer = setInterval(() => {
+      if (view === "measured") void loadObserved(true);
+    }, REFRESH_MS);
+    return () => clearInterval(timer);
   });
+
+  async function loadObserved(quiet = false) {
+    if (!quiet) obsLoading = true;
+    obsError = "";
+    try {
+      observed = await fetchObservations();
+    } catch {
+      if (!quiet || !observed) obsError = "A mért állomásadatok most nem érhetők el. Próbáld újra később.";
+    } finally {
+      obsLoading = false;
+    }
+  }
+
+  function select(next: "model" | "measured") {
+    view = next;
+    if (next === "measured") void loadObserved(observed !== null);
+  }
 
   async function load() {
     loading = true;
@@ -48,10 +76,28 @@
     return `${dir}${num(l.wind_max_ms, "m/s")}${gust}`;
   }
 
+  const timeFormatter = new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" });
+
+  function obsWind(l: LocationObservation): string {
+    if (l.wind_max_ms === null) return NA;
+    const dir = l.wind_direction ? `${l.wind_direction} ` : "";
+    const gust = l.gust_max_ms === null ? "" : ` (széllökés: ${num(l.gust_max_ms, "m/s")}${l.gust_time ? `, ${l.gust_time}` : ""})`;
+    return `${dir}${num(l.wind_max_ms, "m/s")}${gust}`;
+  }
+
+  function latest(l: LocationObservation): string {
+    if (l.latest_temp_c === null) return NA;
+    const humidity = l.latest_humidity_percent === null ? "" : `, páratartalom ${num(l.latest_humidity_percent, "%", 0)}`;
+    return `${num(l.latest_temp_c, "°C")}${humidity}`;
+  }
+
+  const stationList = (l: LocationObservation) =>
+    l.stations.map((s) => `${s.name} (${s.distance_km.toLocaleString("hu-HU")} km)`).join(", ");
+
   const frostClass = (level: string) =>
     ({ magas: "frost-high", mérsékelt: "frost-medium", alacsony: "frost-low", nincs: "frost-none" })[level] ?? "frost-unknown";
 
-  function frost(l: LocationDaily): string {
+  function frost(l: LocationDaily | LocationObservation): string {
     if (l.frost_level === "nincs adat") return "Nincs adat";
     const temp = l.frost_min_temp_c === null ? "" : ` (minimum ${num(l.frost_min_temp_c, "°C")})`;
     return `${l.frost_level[0].toUpperCase()}${l.frost_level.slice(1)}${temp}`;
@@ -81,7 +127,63 @@
       <h1 id="page-title">{report ? dateFormatter.format(new Date(`${report.date}T12:00:00`)) : "Mai jelentés"}</h1>
     </section>
 
-    {#if loading}
+    <div class="view-switch" role="tablist" aria-label="Adatforrás">
+      <button role="tab" aria-selected={view === "measured"} class:active={view === "measured"} onclick={() => select("measured")}>Mért állomásadat</button>
+      <button role="tab" aria-selected={view === "model"} class:active={view === "model"} onclick={() => select("model")}>Modelladat</button>
+    </div>
+
+    {#if view === "measured"}
+      {#if obsLoading}
+        <p class="status-panel" role="status">Állomásadatok betöltése…</p>
+      {:else if obsError}
+        <div class="error-panel" role="alert">
+          <span>{obsError}</span>
+          <button class="retry-button" onclick={() => loadObserved()}>Újrapróbálom</button>
+        </div>
+      {:else if observed}
+        {#if observed.stale}
+          <p class="stale-note" role="status">A forrás most nem érhető el, az utoljára mentett adatokat látod.</p>
+        {/if}
+        <div class="provenance">
+          <span class="source-pill"><span aria-hidden="true">●</span> Mért adat</span>
+          <span>Forrás: HungaroMet ODP, automata állomások (10 perces)</span>
+          {#if observed.as_of}<span>Legfrissebb mérés: {timeFormatter.format(new Date(observed.as_of))}</span>{/if}
+        </div>
+
+        {#each observed.regions as region (region.slug)}
+          <section class="daily-region" aria-labelledby="o-{region.slug}">
+            <h2 id="o-{region.slug}" class="daily-region-title">{region.name}</h2>
+            <div class="daily-grid">
+              {#each region.locations as l (l.slug)}
+                <article class="daily-card">
+                  <h3>{l.name}</h3>
+                  {#if l.method === "nincs adat"}
+                    <p class="fw-week">Nincs elég közeli (20 km-en belüli) mérőállomás.</p>
+                  {:else}
+                    <p class="station-note">
+                      {l.method === "interpoláció" ? "Interpolált érték" : "Legközelebbi állomás"}: {stationList(l)}
+                    </p>
+                    <dl>
+                      <div><dt>Legfrissebb mérés</dt><dd>{latest(l)}</dd></div>
+                      <div><dt>Hőmérséklet, mért (24 h)</dt><dd>{range(l.past_temp_min_c, l.past_temp_max_c)}</dd></div>
+                      <div><dt>Hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>
+                      <div><dt>Csapadék, mért (24 h)</dt><dd>{num(l.past_precip_mm, "mm")}</dd></div>
+                      <div><dt>Csapadék ma</dt><dd>{num(l.precip_today_mm, "mm")}</dd></div>
+                      <div><dt>Szél ma</dt><dd>{obsWind(l)}</dd></div>
+                      <div class="frost-line"><dt>Fagy (mért minimum)</dt><dd class={frostClass(l.frost_level)}>{frost(l)}</dd></div>
+                    </dl>
+                  {/if}
+                </article>
+              {/each}
+            </div>
+          </section>
+        {/each}
+      {/if}
+    {/if}
+
+    {#if view === "measured"}
+      <!-- mért nézet fent -->
+    {:else if loading}
       <p class="status-panel" role="status">Napi jelentés betöltése…</p>
     {:else if error}
       <div class="error-panel" role="alert">
@@ -123,10 +225,4 @@
       {/each}
     {/if}
   </main>
-
-  <footer>
-    Modelladat, nem helyi állomásmérés: az „elmúlt 24 óra” modellezett érték, nem mért. A felszíni
-    minimum nem érhető el ebből a forrásból. A talajnedvesség az Open-Meteo 0–7 cm-es rétegének
-    térfogatszázaléka. A fagyjelzés általános tájékoztatás.
-  </footer>
 </div>

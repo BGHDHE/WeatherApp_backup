@@ -140,3 +140,50 @@ export interface ThresholdsResponse {
   approved_on: string | null;
   thresholds: ThresholdItem[];
 }
+
+export interface StationRef {
+  name: string;
+  distance_km: number;
+  observed_at: string | null;
+}
+
+export interface LocationObservation {
+  name: string;
+  slug: string;
+  method: "interpoláció" | "legközelebbi állomás" | "nincs adat";
+  stations: StationRef[];
+  latest_time: string | null;
+  latest_temp_c: number | null;
+  latest_humidity_percent: number | null;
+  latest_wind_ms: number | null;
+  past_temp_min_c: number | null;
+  past_temp_max_c: number | null;
+  past_precip_mm: number | null;
+  past_gust_max_ms: number | null;
+  today_temp_min_c: number | null;
+  today_temp_max_c: number | null;
+  precip_today_mm: number | null;
+  wind_max_ms: number | null;
+  wind_direction: string | null;
+  gust_max_ms: number | null;
+  gust_time: string | null;
+  frost_level: "nincs adat" | "nincs" | "alacsony" | "mérsékelt" | "magas";
+  frost_min_temp_c: number | null;
+}
+
+export interface RegionObservation {
+  name: string;
+  slug: string;
+  locations: LocationObservation[];
+}
+
+export interface ObservationResponse {
+  provider: "odp.met.hu";
+  source_type: "observation";
+  fetched_at: string;
+  timezone: string;
+  date: string;
+  as_of: string | null;
+  regions: RegionObservation[];
+  stale: boolean;
+}

@@ -7,6 +7,7 @@ from app.schemas import (
     FieldworkResponse,
     ForecastResponse,
     Location,
+    ObservationResponse,
     OutlookResponse,
     ThresholdItem,
     ThresholdsResponse,
@@ -15,6 +16,7 @@ from app.services.daily import fetch_daily
 from app.services.fieldwork import fetch_fieldwork
 from app.services.forecast import WeatherProviderError, fetch_forecast
 from app.services.locations import LOCATIONS, get_location
+from app.services.observations import fetch_observations
 from app.services.outlook import fetch_outlook
 from app.services import thresholds
 from app.services.snapshots import load_snapshot, save_snapshot
@@ -84,6 +86,23 @@ async def get_daily() -> DailyResponse:
             status_code=502,
             detail="A napi időjárás jelenleg nem érhető el",
         ) from exc
+
+@router.get("/observations", response_model=ObservationResponse)
+async def get_observations() -> ObservationResponse:
+    try:
+        result = await fetch_observations()
+        save_snapshot("observations", result)
+        return result
+    except WeatherProviderError as exc:
+        logger.warning("ODP observations request failed: %s", exc)
+        saved = load_snapshot("observations", ObservationResponse)
+        if saved is not None:
+            return saved.model_copy(update={"stale": True})
+        raise HTTPException(
+            status_code=502,
+            detail="A mért állomásadatok jelenleg nem érhetők el",
+        ) from exc
+
 
 @router.get("/fieldwork", response_model=FieldworkResponse)
 async def get_fieldwork() -> FieldworkResponse:
