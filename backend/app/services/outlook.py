@@ -112,7 +112,7 @@ def _alert_message(kind: str, names: list[str], when: str, value: float | None) 
         rain = f", legfeljebb {number} mm esővel" if value is not None and value >= 1 else ""
         return f"{who}: {when} zivatar várható{rain}."
     if kind == "csapadék":
-        return f"{who}: {when} jelentős csapadék várható, legfeljebb {number} mm."
+        return f"{who}: {when} csapadék várható, legfeljebb {number} mm."
     if kind == "szél":
         return f"{who}: {when} erős szél, széllökés legfeljebb {number} m/s."
     if kind == "fagy":

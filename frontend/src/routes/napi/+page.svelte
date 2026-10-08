@@ -130,7 +130,7 @@
     </section>
 
     <div class="view-switch" role="tablist" aria-label="Adatforrás">
-      <button role="tab" aria-selected={view === "measured"} class:active={view === "measured"} onclick={() => select("measured")}>Mért állomásadat</button>
+      <button role="tab" aria-selected={view === "measured"} class:active={view === "measured"} onclick={() => select("measured")}>Állomásadat</button>
       <button role="tab" aria-selected={view === "model"} class:active={view === "model"} onclick={() => select("model")}>Modelladat</button>
     </div>
 

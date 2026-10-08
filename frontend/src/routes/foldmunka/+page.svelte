@@ -107,7 +107,6 @@
               <article class="daily-card fw-card">
                 <h3>{loc.name}</h3>
                 <p class="fw-summary">{loc.summary}</p>
-                <p class="fw-week">Heti csapadék: <strong>{n(loc.precipitation_week_mm, "mm")}</strong></p>
 
                 <div class="fw-scroll">
                   <table class="fw-table">
@@ -149,7 +148,6 @@
     <div class="tip" style="left: {tipState.x}px; top: {tipState.y}px" aria-hidden="true">
       <div class="tip-status {tipState.cls}">{tipState.status}</div>
       <p class="tip-reason">{tipState.reason}</p>
-      <p class="tip-threshold"><span>Küszöb</span> {tipState.threshold}</p>
     </div>
   {/if}
 </div>
