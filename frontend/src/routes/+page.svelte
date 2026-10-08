@@ -68,7 +68,7 @@
       <a href="/napi">Napi Kimutatás</a>
       <a href="/" aria-current="page">Előrejelzés</a>
       <a href="/foldmunka">Földmunka</a>
-      <a href="/kuszobok">Küszöbök</a>
+      <a href="/kuszobok">Beállítások</a>
     </nav>
   </header>
 

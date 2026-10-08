@@ -6,6 +6,7 @@ export interface OutlookDay {
   temp_min_c: number | null;
   temp_max_c: number | null;
   precipitation_max_mm: number | null;
+  wind_max_ms?: number | null;
   wind_gust_max_ms: number | null;
   condition: Condition;
 }
@@ -137,15 +138,10 @@ export interface ThresholdItem {
   label: string;
   unit: string;
   description: string;
-  default: number;
   value: number;
-  overridden: boolean;
 }
 
 export interface ThresholdsResponse {
-  approved: boolean;
-  approved_by: string | null;
-  approved_on: string | null;
   thresholds: ThresholdItem[];
 }
 

@@ -40,6 +40,7 @@ class DayData:
     precip: float | None
     gust: float | None
     weather_code: int | None
+    wind: float | None = None
 
 
 def _value(values: Any, index: int) -> float | None:
@@ -72,6 +73,7 @@ def parse_days(payload: dict[str, Any]) -> list[DayData]:
                 precip=_value(daily.get("precipitation_sum"), index),
                 gust=_value(daily.get("wind_gusts_10m_max"), index),
                 weather_code=int(code) if code is not None else None,
+                wind=_value(daily.get("wind_speed_10m_max"), index),
             )
         )
     return days
@@ -184,6 +186,7 @@ def aggregate_days(days_by_location: dict[str, list[DayData]]) -> list[OutlookDa
                 temp_min_c=_aggregate([d.temp_min for d in entries], min),
                 temp_max_c=_aggregate([d.temp_max for d in entries], max),
                 precipitation_max_mm=precip,
+                wind_max_ms=_aggregate([d.wind for d in entries], max),
                 wind_gust_max_ms=_aggregate([d.gust for d in entries], max),
                 condition=condition,
             )
@@ -216,6 +219,18 @@ def build_summary(days: list[OutlookDay], today: date) -> str:
     highs = [d.temp_max_c for d in days if d.temp_max_c is not None]
     if lows and highs:
         text += f" A hőmérséklet {round(min(lows))} és {round(max(highs))} °C között alakul."
+
+    winds = [(d.wind_max_ms, d) for d in days if d.wind_max_ms is not None]
+    if winds:
+        peak, peak_day = max(winds, key=lambda item: item[0])
+        label = "gyenge" if peak < 4 else "mérsékelt" if peak < 8 else "erős"
+        text += f" A szél {label}, legfeljebb {round(peak)} m/s"
+        if len(days) > 1 and peak >= 4:
+            text += f" ({_when(peak_day.date, today)})"
+        gusts = [d.wind_gust_max_ms for d in days if d.wind_gust_max_ms is not None]
+        if gusts and max(gusts) >= peak + 3:
+            text += f", a széllökés akár {round(max(gusts))} m/s"
+        text += "."
     return text
 
 
@@ -269,7 +284,7 @@ async def fetch_outlook(days: int = 7) -> OutlookResponse:
         "longitude": ",".join(str(location.longitude) for location in LOCATIONS),
         "daily": (
             "temperature_2m_min,temperature_2m_max,precipitation_sum,"
-            "wind_gusts_10m_max,weather_code"
+            "wind_speed_10m_max,wind_gusts_10m_max,weather_code"
         ),
         "wind_speed_unit": "ms",
         "timezone": TIMEZONE,

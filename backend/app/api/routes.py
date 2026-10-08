@@ -122,7 +122,6 @@ async def get_fieldwork() -> FieldworkResponse:
 
 @router.get("/thresholds", response_model=ThresholdsResponse)
 async def get_thresholds() -> ThresholdsResponse:
-    current = thresholds.overrides()
     items = [
         ThresholdItem(
             key=d.key,
@@ -130,15 +129,8 @@ async def get_thresholds() -> ThresholdsResponse:
             label=d.label,
             unit=d.unit,
             description=d.description,
-            default=d.default,
-            value=thresholds.get(d.key),
-            overridden=d.key in current.values,
+            value=d.value,
         )
         for d in thresholds.DEFINITIONS
     ]
-    return ThresholdsResponse(
-        approved=current.approved_by is not None and current.approved_on is not None,
-        approved_by=current.approved_by,
-        approved_on=current.approved_on,
-        thresholds=items,
-    )
+    return ThresholdsResponse(thresholds=items)

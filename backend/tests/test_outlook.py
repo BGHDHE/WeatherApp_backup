@@ -41,8 +41,7 @@ def test_same_event_in_several_locations_is_grouped():
     data = {
         "Kál": [day(0, tmin=-1)],
         "Heves": [day(0, tmin=1)],
-        "Kompolt": [day(0, tmin=6)],
-    }
+   }
     alerts = build_alerts(data, TODAY)
     assert len(alerts) == 1
     assert alerts[0].locations == ["Kál", "Heves"]
@@ -82,7 +81,7 @@ def test_parse_days_and_build_outlook_cover_all_regions():
     assert [r.name for r in result.regions] == [
         "Szarvasgede–Pásztó",
         "Hort–Gyöngyös",
-        "Kál–Kompolt–Heves",
+        "Kál–Heves",
     ]
-    assert result.regions[2].locations == ["Kál", "Kompolt", "Heves"]
+    assert result.regions[2].locations == ["Kál", "Heves"]
     assert result.regions[0].days[1].condition == "csapadék"

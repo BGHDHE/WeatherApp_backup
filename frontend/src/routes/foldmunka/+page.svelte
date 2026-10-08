@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fetchFieldwork } from "$lib/api";
+  import { loadSelection, locationSummary, regionSummary } from "$lib/fieldworkSettings";
   import type { FieldworkDay, FieldworkResponse, FieldworkSlot } from "$lib/types";
+
+  let selected: string[] = $state([]);
 
   let report: FieldworkResponse | null = $state(null);
   let loading = $state(true);
@@ -13,6 +16,7 @@
   const localDate = (iso: string) => new Date(`${iso}T12:00:00`);
 
   onMount(() => {
+    selected = loadSelection();
     void load();
   });
 
@@ -39,8 +43,9 @@
     const a = day.assessments.find((x) => x.activity === activity);
     return a ? `${a.status} – ${a.reason}\nKüszöb: ${a.threshold}` : "";
   }
-  type Tip = { x: number; y: number; status: string; reason: string; threshold: string; cls: string; slots: FieldworkSlot[] };
+  type Tip = { x: number; top: number; bottom: number; status: string; reason: string; threshold: string; cls: string; slots: FieldworkSlot[] };
   let tipState: Tip | null = $state(null);
+  let tipEl: HTMLDivElement | undefined = $state();
 
   function showTip(event: Event, day: FieldworkDay, activity: string) {
     const a = day.assessments.find((x) => x.activity === activity);
@@ -48,8 +53,18 @@
     const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const half = 150;
     const x = Math.min(Math.max(r.left + r.width / 2, half + 8), window.innerWidth - half - 8);
-    tipState = { x, y: r.bottom + 8, status: a.status, reason: a.reason, threshold: a.threshold, cls: statusClass(a.status), slots: a.slots ?? [] };
+    tipState = { x, top: r.top, bottom: r.bottom, status: a.status, reason: a.reason, threshold: a.threshold, cls: statusClass(a.status), slots: a.slots ?? [] };
   }
+
+  $effect(() => {
+    if (!tipState || !tipEl) return;
+    const gap = 8;
+    const height = tipEl.offsetHeight;
+    let y = tipState.bottom + gap;
+    if (y + height > window.innerHeight - gap) y = tipState.top - gap - height;
+    tipEl.style.top = `${Math.max(gap, y)}px`;
+    tipEl.style.visibility = "visible";
+  });
   const symbol = (s: string) => (s === "kedvező" ? "✓" : s === "kedvezőtlen" ? "✕" : s === "feltételes" ? "~" : "?");
   const hideTip = () => (tipState = null);
   const status = (day: FieldworkDay, activity: string) =>
@@ -58,20 +73,20 @@
 </script>
 
 <svelte:head>
-  <title>Angelika Farm AgroSense</title>
+  <title>Angelika Farm Időjárás</title>
 </svelte:head>
 
 <div class="app-shell">
   <header class="topbar">
-    <a class="brand" href="/" aria-label="AgroSense főoldal">
+    <a class="brand" href="/" aria-label="Időjárás főoldal">
       <span class="brand-mark" aria-hidden="true">A</span>
-      <span>Angelika Farm AgroSense<span class="brand-dot">.</span></span>
+      <span>Angelika Farm Időjárás<span class="brand-dot">.</span></span>
     </a>
     <nav class="topnav" aria-label="Főmenü">
       <a href="/napi">Napi kimutatás</a>
       <a href="/">Előrejelzés</a>
       <a href="/foldmunka" aria-current="page">Földmunka</a>
-      <a href="/kuszobok">Küszöbök</a>
+      <a href="/kuszobok">Beállítások</a>
     </nav>
   </header>
 
@@ -101,13 +116,13 @@
       {#each report.regions as region (region.slug)}
         <section class="daily-region" aria-labelledby="fw-{region.slug}">
           <h2 id="fw-{region.slug}" class="daily-region-title">{region.name}</h2>
-          <p class="region-summary">{region.summary}</p>
+          {#if selected.length}<p class="region-summary">{regionSummary(region.locations, selected)}</p>{/if}
 
           <div class="daily-grid">
             {#each region.locations as loc (loc.slug)}
               <article class="daily-card fw-card">
                 <h3>{loc.name}</h3>
-                <p class="fw-summary">{loc.summary}</p>
+                {#if selected.length}<p class="fw-summary">{locationSummary(loc, selected)}</p>{/if}
 
                 <div class="fw-scroll">
                   <table class="fw-table">
@@ -141,7 +156,7 @@
   </main>
 
   {#if tipState}
-    <div class="tip" style="left: {tipState.x}px; top: {tipState.y}px" aria-hidden="true">
+    <div class="tip" bind:this={tipEl} style="left: {tipState.x}px; top: 0; visibility: hidden" aria-hidden="true">
       <div class="tip-status {tipState.cls}">{tipState.status}</div>
       {#if tipState.slots.length}
         <ul class="tip-slots">

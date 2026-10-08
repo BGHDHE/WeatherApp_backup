@@ -92,15 +92,14 @@
 
   const combinedLocationGroups = [
     { name: "Gyöngyös", slugs: ["hort", "gyongyos"] },
-    { name: "Kál", slugs: ["kal", "kompolt"] },
-  ];
+ ];
 
   function displayRegions<
     TLocation extends { name: string; slug: string },
     TRegion extends { name: string; slug: string; locations: TLocation[] },
   >(regions: TRegion[]): TRegion[] {
     const hortRegion = regions.find((region) => region.slug === "hort-gyongyos");
-    const kalRegion = regions.find((region) => region.slug === "kal-kompolt-heves");
+    const kalRegion = regions.find((region) => region.slug === "kal-heves");
     if (!hortRegion || !kalRegion) return regions;
 
     return regions
@@ -286,7 +285,7 @@
       <a href="/napi" aria-current="page">Napi kimutatás</a>
       <a href="/">Előrejelzés</a>
       <a href="/foldmunka">Földmunka</a>
-      <a href="/kuszobok">Küszöbök</a>
+      <a href="/kuszobok">Beállítások</a>
     </nav>
   </header>
 

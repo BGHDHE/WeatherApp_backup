@@ -1,16 +1,5 @@
-"""Az összes szabályküszöb egy helyen, hogy szakmailag átnézhető és felülírható legyen.
-
-Felülírás: JSON fájl (THRESHOLDS_FILE, alapértelmezés: data/thresholds.json), pl.
-{"approved_by": "Kovács Anna", "approved_on": "2026-10-20", "values": {"spray.max_gust_ms": 6}}
-Az érvénytelen vagy ismeretlen kulcsokat figyelmen kívül hagyjuk. Változtatás után a backend újraindítása kell.
-"""
-import json
-import logging
-import os
+"""Az összes szabályküszöb egy helyen; az értékek ebben a fájlban módosíthatók (utána a backend újraindítása kell)."""
 from dataclasses import dataclass
-from pathlib import Path
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -18,7 +7,7 @@ class Threshold:
     key: str
     group: str
     label: str
-    default: float
+    value: float
     unit: str
     description: str
 
@@ -33,7 +22,8 @@ DEFINITIONS: list[Threshold] = [
     Threshold("outlook.heat_c", "Kirívó események (előrejelzés)", "Hőségriasztás", 33.0, "°C", "A napi maximum meghaladja a hőségriasztási küszöböt."),
     Threshold("outlook.wet_day_mm", "Kirívó események (előrejelzés)", "Csapadékos nap", 1.0, "mm", "A napi csapadékösszeg alapján esős napnak számít."),
     Threshold("spray.max_precip_mm", "Permetezés", "Maximum csapadék", 0.5, "mm", "A megengedettnél több csapadék esetén nem javasolt."),
-    Threshold("spray.max_gust_ms", "Permetezés", "Maximum széllökés", 8.0, "m/s", "A határértéknél erősebb szélben nem javasolt (elsodródás veszélye)."),
+    Threshold("spray.max_wind_ms", "Permetezés", "Maximum szélsebesség", 5.0, "m/s", "A határértéknél erősebb átlagos szélben nem javasolt (elsodródás veszélye)."),
+    Threshold("spray.max_gust_ms", "Permetezés", "Maximum széllökés", 8.0, "m/s", "A határértéknél erősebb széllökés esetén nem javasolt (elsodródás veszélye)."),
     Threshold("spray.min_temp_c", "Permetezés", "Minimum hőmérséklet", 5.0, "°C", "A minimális üzemi hőmérséklet alatt nem javasolt."),
     Threshold("spray.max_temp_c", "Permetezés", "Maximum hőmérséklet", 25.0, "°C", "A maximális üzemi hőmérséklet felett nem javasolt."),
     Threshold("harvest.max_precip_mm", "Betakarítás", "Maximum csapadék", 1.0, "mm", "A kritikus csapadékmennyiség felett nem javasolt."),
@@ -53,49 +43,5 @@ DEFINITIONS: list[Threshold] = [
 _BY_KEY = {t.key: t for t in DEFINITIONS}
 
 
-@dataclass(frozen=True)
-class Overrides:
-    values: dict[str, float]
-    approved_by: str | None
-    approved_on: str | None
-
-
-def _path() -> Path:
-    return Path(os.environ.get("THRESHOLDS_FILE", "data/thresholds.json"))
-
-
-def load_overrides(path: Path | None = None) -> Overrides:
-    path = path or _path()
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return Overrides({}, None, None)
-    except (OSError, ValueError) as exc:
-        logger.warning("Küszöbfájl nem olvasható (%s), az alapértékek érvényesek", exc)
-        return Overrides({}, None, None)
-    if not isinstance(raw, dict):
-        return Overrides({}, None, None)
-    values: dict[str, float] = {}
-    for key, value in (raw.get("values") or {}).items():
-        if key in _BY_KEY and isinstance(value, (int, float)) and not isinstance(value, bool):
-            values[key] = float(value)
-        else:
-            logger.warning("Érvénytelen küszöb figyelmen kívül hagyva: %s", key)
-    approved_by = raw.get("approved_by")
-    approved_on = raw.get("approved_on")
-    return Overrides(
-        values,
-        approved_by if isinstance(approved_by, str) else None,
-        approved_on if isinstance(approved_on, str) else None,
-    )
-
-
-_overrides = load_overrides()
-
-
 def get(key: str) -> float:
-    return _overrides.values.get(key, _BY_KEY[key].default)
-
-
-def overrides() -> Overrides:
-    return _overrides
+    return _BY_KEY[key].value

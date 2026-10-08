@@ -17,6 +17,12 @@ def test_spray_temperature_limits():
     assert assess_spraying(0.0, 5.0, 8.0, 30.0).status == "kedvezőtlen"
 
 
+def test_spray_mean_wind_limit():
+    a = assess_spraying(0.0, 7.0, 8.0, 20.0, wind=6.0)
+    assert a.status == "kedvezőtlen" and "szél 6" in a.reason
+    assert assess_spraying(0.0, 7.0, 8.0, 20.0, wind=3.0).status == "kedvező"
+
+
 def test_missing_data_is_not_favourable():
     assert assess_spraying(0.0, None, 8.0, 20.0).status == "nincs adat"
     assert assess_harvest(None).status == "nincs adat"

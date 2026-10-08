@@ -69,6 +69,7 @@ class FieldHour:
     soil_temp: float | None
     top: float | None
     sub: float | None
+    wind: float | None = None
 
 
 def _num(values: Any, index: int) -> float | None:
@@ -100,6 +101,7 @@ def parse_field_hours(payload: dict[str, Any]) -> tuple[date, list[FieldHour]]:
                 soil_temp=_num(hourly.get("soil_temperature_6cm"), i),
                 top=_num(hourly.get("soil_moisture_0_to_7cm"), i),
                 sub=_num(hourly.get("soil_moisture_7_to_28cm"), i),
+                wind=_num(hourly.get("wind_speed_10m"), i),
             )
             for i, raw in enumerate(hourly["time"])
         ]
@@ -307,6 +309,7 @@ def build_location(
                         temp_min=_min(slot_hours, "temp"),
                         temp_max=_max(slot_hours, "temp"),
                         gust=_max(slot_hours, "gust"),
+                        wind=_max(slot_hours, "wind"),
                         soil_temp=_mean(slot_hours, "soil_temp"),
                         top=_mean(slot_hours, "top", 100),
                         sub=_mean(slot_hours, "sub", 100),
@@ -332,7 +335,7 @@ def build_location(
             ),
             combine_slots(
                 [
-                    (label, assess_spraying(v["precip"], v["gust"], v["temp_min"], v["temp_max"], s))
+                    (label, assess_spraying(v["precip"], v["gust"], v["temp_min"], v["temp_max"], s, v["wind"]))
                     for label, v in slots
                 ]
             ),
@@ -447,7 +450,7 @@ async def fetch_fieldwork() -> FieldworkResponse:
     params = {
         "latitude": ",".join(str(l.latitude) for l in LOCATIONS),
         "longitude": ",".join(str(l.longitude) for l in LOCATIONS),
-        "hourly": "temperature_2m,precipitation,wind_gusts_10m,soil_temperature_6cm,"
+        "hourly": "temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m,soil_temperature_6cm,"
         "soil_moisture_0_to_7cm,soil_moisture_7_to_28cm",
         "current": "temperature_2m",
         "wind_speed_unit": "ms",

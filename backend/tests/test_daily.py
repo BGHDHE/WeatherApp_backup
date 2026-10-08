@@ -64,6 +64,6 @@ def test_build_daily_groups_by_region():
     data = {l.slug: (NOW, day_hours()) for l in LOCATIONS}
     result = build_daily(data, datetime(2026, 10, 6, tzinfo=timezone.utc))
     assert [r.name for r in result.regions] == [
-        "Szarvasgede–Pásztó", "Hort–Gyöngyös", "Kál–Kompolt–Heves"]
-    assert [l.name for l in result.regions[2].locations] == ["Kál", "Kompolt", "Heves"]
+        "Szarvasgede–Pásztó", "Hort–Gyöngyös", "Kál–Heves"]
+    assert [l.name for l in result.regions[2].locations] == ["Kál", "Heves"]
     assert str(result.date) == "2026-10-06"

@@ -1,13 +1,22 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fetchThresholds } from "$lib/api";
+  import { ACTIVITY_OPTIONS, loadSelection, saveSelection } from "$lib/fieldworkSettings";
   import type { ThresholdItem, ThresholdsResponse } from "$lib/types";
+
+  let selected: string[] = $state([]);
+
+  function toggle(key: string, checked: boolean) {
+    selected = checked ? [...selected, key] : selected.filter((k) => k !== key);
+    saveSelection(selected);
+  }
 
   let data: ThresholdsResponse | null = $state(null);
   let loading = $state(true);
   let error = $state("");
 
   onMount(() => {
+    selected = loadSelection();
     void load();
   });
 
@@ -32,22 +41,6 @@
     }
     return [...map.entries()];
   });
-
-  function exportCsv() {
-    if (!data) return;
-    const cell = (s: string) => `"${s.replace(/"/g, '""')}"`;
-    const rows = [
-      ["Csoport", "Küszöb megnevezése", "Mértékegység", "Érvényes érték", "Magyarázat", "Agronómus jóváhagyja (igen/nem)", "Javasolt érték", "Megjegyzés"],
-      ...data.thresholds.map((t) => [t.group, t.label, t.unit, String(t.value), t.description, "", "", ""]),
-    ];
-    const csv = "\ufeff" + rows.map((r) => r.map(cell).join(";")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "kuszobertekek-jovahagyasra.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
 </script>
 
 <svelte:head>
@@ -64,13 +57,26 @@
       <a href="/napi">Napi kimutatás</a>
       <a href="/">Előrejelzés</a>
       <a href="/foldmunka">Földmunka</a>
-      <a href="/kuszobok" aria-current="page">Küszöbök</a>
+      <a href="/kuszobok" aria-current="page">Beállítások</a>
     </nav>
   </header>
 
   <main>
-    <section class="intro" aria-labelledby="page-title">
-      <h1 id="page-title">Működési küszöbértékek</h1>
+    <section class="daily-region" aria-labelledby="fw-settings">
+      <h2 id="fw-settings" class="daily-region-title">Földmunka összefoglaló</h2>
+      <p class="region-summary">Válaszd ki, mely munkákról készüljön szöveges összefoglaló a Földmunka oldalon.</p>
+      <div class="fw-options">
+        {#each ACTIVITY_OPTIONS as o (o.key)}
+          <label class="fw-option">
+            <input type="checkbox" checked={selected.includes(o.key)} onchange={(e) => toggle(o.key, e.currentTarget.checked)} />
+            {o.label}
+          </label>
+        {/each}
+      </div>
+    </section>
+
+    <section class="intro" aria-labelledby="page-subtitle">
+      <h2 id="page-subtitle">Küszöbértékek</h2>
     </section>
 
     {#if loading}
@@ -81,15 +87,6 @@
         <button class="retry-button" onclick={load}>Újrapróbálás</button>
       </div>
     {:else if data}
-      {#if data.approved}
-        <p class="approval approval-ok" role="status">Jóváhagyta: {data.approved_by}, {data.approved_on}</p>
-      {:else}
-        <p class="stale-note" role="status">Agronómiai felülvizsgálat szükséges.</p>
-      {/if}
-
-      <div class="no-print kuszob-actions">
-        <button class="retry-button" onclick={() => window.print()}>Nyomtatás</button>
-      </div>
 
       {#each groups as [group, items] (group)}
         <section class="daily-region" aria-labelledby="g-{group}">
@@ -107,7 +104,7 @@
                 {#each items as t (t.key)}
                   <tr>
                     <th scope="row" class="col-label">{t.label}</th>
-                    <td class="col-value"><strong>{num(t.value)} {t.unit}</strong>{#if t.overridden} <span class="override-tag">módosított</span>{/if}</td>
+                    <td class="col-value"><strong>{num(t.value)} {t.unit}</strong></td>
                     <td class="col-desc kuszob-desc">{t.description}</td>
                   </tr>
                 {/each}
@@ -121,6 +118,20 @@
 </div>
 
 <style>
+  .fw-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-top: 8px;
+  }
+
+  .fw-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
   .kuszob-table {
     width: 100%;
     table-layout: fixed;

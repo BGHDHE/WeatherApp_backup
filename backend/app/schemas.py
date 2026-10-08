@@ -49,6 +49,7 @@ class OutlookDay(BaseModel):
     temp_min_c: float | None
     temp_max_c: float | None
     precipitation_max_mm: float | None
+    wind_max_ms: float | None = None
     wind_gust_max_ms: float | None
     condition: Literal["száraz", "csapadék", "zivatar", "nincs adat"]
 
@@ -175,15 +176,10 @@ class ThresholdItem(BaseModel):
     label: str
     unit: str
     description: str
-    default: float
     value: float
-    overridden: bool
 
 
 class ThresholdsResponse(BaseModel):
-    approved: bool
-    approved_by: str | None
-    approved_on: str | None
     thresholds: list[ThresholdItem]
 
 class StationRef(BaseModel):

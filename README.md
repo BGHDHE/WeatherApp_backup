@@ -1,6 +1,6 @@
 # Agromet Időjárás
 
-Mobil-első települési időjárás-alkalmazás FastAPI backenddel és SvelteKit
+Mobil-első települési időjárás-alkalmazás FastAPI backenddel és Svelteáit
 frontenddel. Az előrejelzések Open-Meteo modelladatok, nem helyi
 állomásmérések.
 
@@ -18,7 +18,7 @@ Az API dokumentációja a `http://127.0.0.1:8000/docs` címen érhető el.
 
 - `GET /api/health`
 - `GET /api/locations`
-- `GET /api/outlook?days=7` – 7 napos agrár előretekintés térségenként (Szarvasgede–Pásztó, Hort–Gyöngyös, Kál–Kompolt–Heves): általános összegzés, napi sáv és külön kirívó események (zivatar, ≥10 mm csapadék, erős szél, fagy, hőség). A küszöbök a `backend/app/services/outlook.py` elején állíthatók, agronómussal jóváhagyandók.
+- `GET /api/outlook?days=7` – 7 napos agrár előretekintés térségenként (Szarvasgede–Pásztó, Hort–Gyöngyös, áál–áompolt–Heves): általános összegzés, napi sáv és külön kirívó események (zivatar, ≥10 mm csapadék, erős szél, fagy, hőség). A küszöbök a `backend/app/services/outlook.py` elején állíthatók, agronómussal jóváhagyandók.
 - `GET /api/reports/forecast?location=paszto&days=4`
 
 ## Frontend indítása
@@ -49,12 +49,12 @@ python -m pytest
 docker compose up --build
 ```
 
-Az alkalmazás helyben a http://localhost:8080 címen érhető el (Nginx: `/api` → backend, a többi → SvelteKit). A port alapértelmezés szerint csak a localhoston figyel; ha más gépről is el kell érni, állítsd a `HTTP_BIND` értékét `0.0.0.0`-ra.
+Az alkalmazás helyben a http://localhost:8080 címen érhető el (Nginx: `/api` → backend, a többi → Svelteáit). A port alapértelmezés szerint csak a localhoston figyel; ha más gépről is el kell érni, állítsd a `HTTP_BIND` értékét `0.0.0.0`-ra.
 
 ### Éles deploy Cloudflare Tunnel-lel
 
 1. A Cloudflare Zero Trust felületén hozz létre egy Cloudflare Tunnel-t, és válaszd a Docker telepítési módot. Másold ki a tunnel tokent.
-2. Másold a `.env.example` fájlt `.env` néven (`Copy-Item .env.example .env`), majd állítsd be benne a `CLOUDFLARE_TUNNEL_TOKEN` tokent és a `PUBLIC_ORIGIN` értékét a publikus HTTPS-címre (például `https://idojaras.example.com`). A `.env` fájl nem kerül Gitbe.
+2. Másold a `.env.example` fájlt `.env` néven (`Copy-Item .env.example .env`), majd állítsd be benne a `CLOUDFLARE_TUNNEL_TOáEN` tokent és a `PUBLIC_ORIGIN` értékét a publikus HTTPS-címre (például `https://idojaras.example.com`). A `.env` fájl nem kerül Gitbe.
 3. A Cloudflare Tunnel publikus hostname útvonalánál állítsd be a domainnevet, célként pedig ezt: `http://nginx:80`. A `nginx` a Docker Compose belső hálózatán érhető el, nem kell hozzá külön nyilvános port.
 4. Indítsd el az alkalmazást és a tunnelt:
 
@@ -69,7 +69,7 @@ docker compose --profile cloudflare ps
 docker compose logs -f cloudflared
 ```
 
-A Tunnel profil használatakor a `cloudflared` szolgáltatás a Compose-hálózaton keresztül éri el az Nginxet. A hoston közzétett `8080`-as port alapból csak localhostról érhető el, így a publikus forgalom a Cloudflare Tunnelön halad át. Az éles URL-t a `.env` `PUBLIC_ORIGIN` értékével kell egyeztetni a SvelteKit origin-ellenőrzéséhez. A Docker-konténerek ebben a környezetben nem futtathatók, a frontend `adapter-node` build-je viszont ellenőrzött.
+A Tunnel profil használatakor a `cloudflared` szolgáltatás a Compose-hálózaton keresztül éri el az Nginxet. A hoston közzétett `8080`-as port alapból csak localhostról érhető el, így a publikus forgalom a Cloudflare Tunnelön halad át. Az éles URL-t a `.env` `PUBLIC_ORIGIN` értékével kell egyeztetni a Svelteáit origin-ellenőrzéséhez. A Docker-konténerek ebben a környezetben nem futtathatók, a frontend `adapter-node` build-je viszont ellenőrzött.
 
 ## CI
 
@@ -84,15 +84,10 @@ Sikeres Open-Meteo lekérés után az /api/outlook és /api/daily válasza SQLit
 
 `GET /api/fieldwork` – 7 napos, településenkénti és térségi elemzés: talajművelés, vetés, gépek járhatósága, permetezés és betakarítás naponta (kedvező / feltételes / kedvezőtlen / nincs adat, okkal és küszöbbel), a csapadék, az előző 3 nap csapadéka, a felső (0–7 cm) és alsó (7–28 cm) talajnedvesség, talajhőmérséklet és hőmérséklet. Településenként a leghosszabb kedvező talajmunka-ablak, térségenként a mindenhol kedvező napok. Szabályok és küszöbök: `backend/app/services/fieldwork.py` és `decisions.py` (permetezés: csapadék, széllökés, hőmérséklet; betakarítás: csapadék; kezdeti becslések, agronómussal jóváhagyandók; modelladat, nem helyszíni mérés). 30 perces cache, SQLite-pillanatkép (`stale`). Frontend: `/foldmunka`.
 
-## Küszöbök és szakmai jóváhagyás
+## áüszöbök
 
-A riasztások és a földmunka-jelzések küszöbei a `/kuszobok` oldalon láthatók (csoportosítva, alapértékkel,
-magyarázattal). Az oldalról CSV tölthető le vagy nyomtatható, így az agronómus átnézheti és jóváhagyhatja.
-
-Módosítás: másold a `backend/thresholds.example.json` fájlt `backend/data/thresholds.json` néven
-(vagy add meg a `THRESHOLDS_FILE` környezeti változót), írd át az értékeket, töltsd ki az `approved_by`
-és `approved_on` mezőt, majd indítsd újra a backendet. Az ismeretlen vagy érvénytelen kulcsok az alapértéket kapják.
-Dockerben a `data/` kötet (`snapshots:/app/data`) a fájlt is megőrzi.
+A riasztások és a földmunka-jelzések küszöbei a `/kuszobok` oldalon láthatók (csoportosítva, magyarázattal).
+Az értékek egyszer, a `backend/app/services/thresholds.py` `DEFINITIONS` listájában állíthatók; módosítás után a backendet újra kell indítani.
 
 ## Mért állomásadatok (napi kimutatás)
 
