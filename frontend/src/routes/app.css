@@ -164,6 +164,10 @@ footer { padding: 19px 0 23px; border-top: 1px solid #e3e9e3; color: #8a958d; fo
 .tip { position: fixed; z-index: 50; width: 300px; max-width: calc(100vw - 16px); transform: translateX(-50%); padding: 12px 14px; border-radius: 12px; color: #25352d; background: #fff; box-shadow: 0 8px 28px rgba(20, 40, 30, 0.22); border: 1px solid #e1e8e3; font-size: 13px; line-height: 1.4; text-align: left; pointer-events: none; }
 .tip-status { display: inline-block; margin-bottom: 6px; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .tip-reason { margin: 0 0 8px; font-weight: 600; }
+.tip-slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.tip-slots li { display: grid; grid-template-columns: 22px 62px 1fr; gap: 6px; align-items: start; font-size: 12px; }
+.tip-slots .window-dot { width: 20px; height: 20px; font-size: 11px; }
+.tip-slot-time { font-weight: 700; }
 .tip-threshold { margin: 0; padding-top: 8px; border-top: 1px solid #eef2ef; color: #58685f; font-size: 12px; }
 .tip-threshold span { display: block; color: #89948d; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .fw-table .dot-btn { border: 0; font-family: inherit; }

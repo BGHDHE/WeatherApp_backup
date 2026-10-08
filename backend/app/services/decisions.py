@@ -20,11 +20,11 @@ def _a(activity, status, reason, threshold) -> FieldworkAssessment:
     return FieldworkAssessment(activity=activity, status=status, reason=reason, threshold=threshold)
 
 
-def assess_spraying(precip, gust, temp_min, temp_max) -> FieldworkAssessment:
+def assess_spraying(precip, gust, temp_min, temp_max, precip_scale=1.0) -> FieldworkAssessment:
     if None in (precip, gust, temp_min, temp_max):
         return _a("permetezés", "nincs adat", "Hiányos adat", SPRAY_THRESHOLD)
     problems = []
-    if precip > SPRAY_MAX_PRECIP_MM:
+    if precip > SPRAY_MAX_PRECIP_MM * precip_scale:
         problems.append(f"csapadék {precip:g} mm")
     if gust > SPRAY_MAX_GUST_MS:
         problems.append(f"széllökés {gust:g} m/s")
@@ -37,9 +37,9 @@ def assess_spraying(precip, gust, temp_min, temp_max) -> FieldworkAssessment:
     return _a("permetezés", "kedvező", "A feltételek a küszöbökön belül vannak", SPRAY_THRESHOLD)
 
 
-def assess_harvest(precip) -> FieldworkAssessment:
+def assess_harvest(precip, precip_scale=1.0) -> FieldworkAssessment:
     if precip is None:
         return _a("betakarítás", "nincs adat", "Hiányos adat", HARVEST_THRESHOLD)
-    if precip > HARVEST_MAX_PRECIP_MM:
+    if precip > HARVEST_MAX_PRECIP_MM * precip_scale:
         return _a("betakarítás", "kedvezőtlen", f"csapadék {precip:g} mm", HARVEST_THRESHOLD)
     return _a("betakarítás", "kedvező", "Száraz idő várható", HARVEST_THRESHOLD)

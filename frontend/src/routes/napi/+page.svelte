@@ -91,8 +91,8 @@
   }
 
   const combinedLocationGroups = [
-    { name: "Hort–Gyöngyös", slugs: ["hort", "gyongyos"] },
-    { name: "Kál–Kompolt", slugs: ["kal", "kompolt"] },
+    { name: "Gyöngyös", slugs: ["hort", "gyongyos"] },
+    { name: "Kál", slugs: ["kal", "kompolt"] },
   ];
 
   function displayRegions<

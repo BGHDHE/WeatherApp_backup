@@ -78,11 +78,18 @@ export interface DailyResponse {
 
 export type FieldworkStatus = "kedvező" | "feltételes" | "kedvezőtlen" | "nincs adat";
 
+export interface FieldworkSlot {
+  label: string;
+  status: FieldworkStatus;
+  reason: string;
+}
+
 export interface FieldworkAssessment {
   activity: "talajművelés" | "vetés" | "gépek járhatósága" | "permetezés" | "betakarítás";
   status: FieldworkStatus;
   reason: string;
   threshold: string;
+  slots?: FieldworkSlot[];
 }
 
 export interface FieldworkDay {
@@ -95,6 +102,7 @@ export interface FieldworkDay {
   topsoil_moisture_percent: number | null;
   subsoil_moisture_percent: number | null;
   wind_gust_max_ms: number | null;
+  observed?: boolean;
   assessments: FieldworkAssessment[];
 }
 

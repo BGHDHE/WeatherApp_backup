@@ -70,6 +70,21 @@ def test_region_summary_requires_all_locations():
     assert "szerdán" not in text.split("kedvező talajművelésre:")[-1]
     assert build_region_summary([a, a]).startswith("Az egész térségben")
 
+def test_day_status_is_built_from_time_slots():
+    rainy = hours()
+    for i, h in enumerate(rainy):
+        if h.ts.date() == date(2026, 10, 8) and 9 <= h.ts.hour < 12:
+            rainy[i] = FieldHour(ts=h.ts, temp=10.0, precip=3.0, gust=4.0, soil_temp=10.0, top=0.25, sub=0.28)
+    loc = build_location("Teszt", "teszt", TODAY, rainy)
+    day = {d.date: d for d in loc.days}[date(2026, 10, 8)]
+    harvest = next(a for a in day.assessments if a.activity == "betakarítás")
+    assert [s.label for s in harvest.slots] == ["6–9", "9–12", "12–15", "15–18"]
+    assert [s.status for s in harvest.slots] == ["kedvező", "kedvezőtlen", "kedvező", "kedvező"]
+    assert harvest.status == "feltételes" and "9–12" in harvest.reason
+    clear = {d.date: d for d in loc.days}[date(2026, 10, 9)]
+    assert all(a.status == "kedvező" and len(a.slots) == 4 for a in clear.assessments)
+
+
 def test_location_days_include_spraying_and_harvest():
     loc = build_location("Teszt", "teszt", TODAY, hours())
     activities = [a.activity for a in loc.days[0].assessments]

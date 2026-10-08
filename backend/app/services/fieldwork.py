@@ -12,16 +12,22 @@ from app.schemas import (
     FieldworkLocation,
     FieldworkRegion,
     FieldworkResponse,
+    FieldworkSlot,
+    LocationObservation,
+    ObservationResponse,
 )
 from app.services import thresholds
+from app.services.observations import fetch_observations
 from app.services.decisions import assess_harvest, assess_spraying
 from app.services.forecast import OPEN_METEO_URL, TIMEZONE, WeatherProviderError
 from app.services.locations import LOCATIONS, REGIONS
 from app.services.outlook import WEEKDAYS_ON
 
-CACHE_SECONDS = 30 * 60
+CACHE_SECONDS = 10 * 60
 FORECAST_DAYS = 7
 PAST_DAYS = 3
+SLOTS = [(6, 9), (9, 12), (12, 15), (15, 18)]
+SLOT_PRECIP_SCALE = 0.25
 
 # Kezdeti küszöbök; éles használat előtt agronómussal jóváhagyandók.
 TILL_OK_PRECIP = thresholds.get("tillage.ok_precip_mm")
@@ -140,7 +146,7 @@ def _no_data(activity, threshold) -> FieldworkAssessment:
     return FieldworkAssessment(activity=activity, status="nincs adat", reason="Hiányos adat", threshold=threshold)
 
 
-def assess_tillage(precip, prev3, sub, soil_temp) -> FieldworkAssessment:
+def assess_tillage(precip, prev3, sub, soil_temp, precip_scale=1.0) -> FieldworkAssessment:
     if None in (precip, prev3, sub, soil_temp):
         return _no_data("talajművelés", TILL_THRESHOLD)
     bad, caution = [], []
@@ -150,9 +156,9 @@ def assess_tillage(precip, prev3, sub, soil_temp) -> FieldworkAssessment:
         bad.append(f"átázott alsó réteg ({sub:g}%)")
     elif sub > TILL_OK_SUBSOIL:
         caution.append(f"nedves alsó réteg ({sub:g}%)")
-    if precip > TILL_BAD_PRECIP:
+    if precip > TILL_BAD_PRECIP * precip_scale:
         bad.append(f"csapadék {precip:g} mm")
-    elif precip > TILL_OK_PRECIP:
+    elif precip > TILL_OK_PRECIP * precip_scale:
         caution.append(f"csapadék {precip:g} mm")
     if prev3 > TILL_BAD_PREV3:
         bad.append(f"előző 3 napban {prev3:g} mm")
@@ -161,7 +167,7 @@ def assess_tillage(precip, prev3, sub, soil_temp) -> FieldworkAssessment:
     return _verdict("talajművelés", TILL_THRESHOLD, bad, caution, "A talaj és a csapadék a küszöbökön belül van")
 
 
-def assess_traffic(precip, prev3, top) -> FieldworkAssessment:
+def assess_traffic(precip, prev3, top, precip_scale=1.0) -> FieldworkAssessment:
     if None in (precip, prev3, top):
         return _no_data("gépek járhatósága", TRAFFIC_THRESHOLD)
     bad, caution = [], []
@@ -169,9 +175,9 @@ def assess_traffic(precip, prev3, top) -> FieldworkAssessment:
         bad.append(f"vizes felső réteg ({top:g}%)")
     elif top > TRAFFIC_OK_TOPSOIL:
         caution.append(f"nedves felső réteg ({top:g}%)")
-    if precip > TILL_BAD_PRECIP:
+    if precip > TILL_BAD_PRECIP * precip_scale:
         bad.append(f"csapadék {precip:g} mm")
-    elif precip > TILL_OK_PRECIP:
+    elif precip > TILL_OK_PRECIP * precip_scale:
         caution.append(f"csapadék {precip:g} mm")
     if prev3 > TILL_BAD_PREV3:
         bad.append(f"előző 3 napban {prev3:g} mm")
@@ -180,7 +186,7 @@ def assess_traffic(precip, prev3, top) -> FieldworkAssessment:
     return _verdict("gépek járhatósága", TRAFFIC_THRESHOLD, bad, caution, "A talaj teherbíró, száraz idő várható")
 
 
-def assess_sowing(precip, soil_temp, temp_min, top) -> FieldworkAssessment:
+def assess_sowing(precip, soil_temp, temp_min, top, precip_scale=1.0) -> FieldworkAssessment:
     if None in (precip, soil_temp, temp_min, top):
         return _no_data("vetés", SOW_THRESHOLD)
     bad, caution = [], []
@@ -190,7 +196,7 @@ def assess_sowing(precip, soil_temp, temp_min, top) -> FieldworkAssessment:
         caution.append(f"hűvös talaj ({soil_temp:g} °C)")
     if temp_min <= 0:
         bad.append(f"fagy ({temp_min:g} °C)")
-    if precip > TILL_BAD_PRECIP:
+    if precip > TILL_BAD_PRECIP * precip_scale:
         bad.append(f"csapadék {precip:g} mm")
     if top < SOW_DRY_TOPSOIL:
         caution.append(f"száraz felső réteg ({top:g}%)")
@@ -214,7 +220,42 @@ def format_run(run: list[date]) -> str:
     return first if len(run) == 1 else f"{first}–{last}"
 
 
-def build_location(name: str, slug: str, today: date, hours: list[FieldHour]) -> FieldworkLocation:
+def combine_slots(results: list[tuple[str, FieldworkAssessment]]) -> FieldworkAssessment:
+    """A nap értékelése a 3 órás szakaszokból: mind kedvezőtlen -> kedvezőtlen; mind kedvező -> kedvező;
+    egyébként (legalább egy feltételes vagy kedvezőtlen) feltételes."""
+    first = results[0][1]
+    slots = [FieldworkSlot(label=label, status=a.status, reason=a.reason) for label, a in results]
+    known = [s for s in slots if s.status != "nincs adat"]
+    threshold = first.threshold + f" (3 órás szakaszokra a csapadékküszöb ×{SLOT_PRECIP_SCALE:g})"
+    if not known:
+        return FieldworkAssessment(
+            activity=first.activity, status="nincs adat", reason="Hiányos adat", threshold=threshold, slots=slots
+        )
+    bad = [s for s in known if s.status == "kedvezőtlen"]
+    warn = [s for s in known if s.status == "feltételes"]
+    if len(bad) == len(slots):
+        status = "kedvezőtlen"
+    elif bad or warn:
+        status = "feltételes"
+    else:
+        status = "kedvező"
+    if status == "kedvező":
+        reason = "Mind a négy időszak (6–18 óra) kedvező"
+    else:
+        reason = "; ".join(f"{s.label} óra: {s.reason}" for s in bad + warn)
+    return FieldworkAssessment(
+        activity=first.activity, status=status, reason=reason, threshold=threshold, slots=slots
+    )
+
+
+def build_location(
+    name: str,
+    slug: str,
+    today: date,
+    hours: list[FieldHour],
+    observation: LocationObservation | None = None,
+    observed_date: date | None = None,
+) -> FieldworkLocation:
     by_day: dict[date, list[FieldHour]] = defaultdict(list)
     for h in hours:
         by_day[h.ts.date()].append(h)
@@ -235,6 +276,68 @@ def build_location(name: str, slug: str, today: date, hours: list[FieldHour]) ->
         temp_min = _min(day_hours, "temp")
         gust = _max(day_hours, "gust")
         temp_max = _max(day_hours, "temp")
+        observed = False
+        precip_factor = 1.0
+        precip_even: float | None = None
+        if observation is not None and d == today and observed_date == today:
+            if observation.precip_today_mm is not None:
+                if precip and precip > 0:
+                    precip_factor = observation.precip_today_mm / precip
+                else:
+                    precip_even = observation.precip_today_mm
+                precip, observed = observation.precip_today_mm, True
+            if observation.today_temp_min_c is not None and observation.today_temp_max_c is not None:
+                temp_min, temp_max, observed = observation.today_temp_min_c, observation.today_temp_max_c, True
+            if observation.gust_max_ms is not None:
+                gust, observed = observation.gust_max_ms, True
+
+        slots = []
+        for start, end in SLOTS:
+            slot_hours = [h for h in day_hours if start <= h.ts.hour < end]
+            slot_precip = _sum(slot_hours, "precip")
+            if slot_precip is not None:
+                slot_precip = round(slot_precip * precip_factor, 2)
+            if precip_even is not None and slot_hours:
+                slot_precip = round(precip_even * len(slot_hours) / 24, 2)
+            slots.append(
+                (
+                    f"{start}–{end}",
+                    dict(
+                        precip=slot_precip,
+                        temp_min=_min(slot_hours, "temp"),
+                        temp_max=_max(slot_hours, "temp"),
+                        gust=_max(slot_hours, "gust"),
+                        soil_temp=_mean(slot_hours, "soil_temp"),
+                        top=_mean(slot_hours, "top", 100),
+                        sub=_mean(slot_hours, "sub", 100),
+                    ),
+                )
+            )
+        s = SLOT_PRECIP_SCALE
+        assessments = [
+            combine_slots(
+                [
+                    (label, assess_tillage(v["precip"], prev3, v["sub"], v["soil_temp"], s))
+                    for label, v in slots
+                ]
+            ),
+            combine_slots(
+                [
+                    (label, assess_sowing(v["precip"], v["soil_temp"], v["temp_min"], v["top"], s))
+                    for label, v in slots
+                ]
+            ),
+            combine_slots(
+                [(label, assess_traffic(v["precip"], prev3, v["top"], s)) for label, v in slots]
+            ),
+            combine_slots(
+                [
+                    (label, assess_spraying(v["precip"], v["gust"], v["temp_min"], v["temp_max"], s))
+                    for label, v in slots
+                ]
+            ),
+            combine_slots([(label, assess_harvest(v["precip"], s)) for label, v in slots]),
+        ]
         days.append(
             FieldworkDay(
                 date=d,
@@ -246,13 +349,8 @@ def build_location(name: str, slug: str, today: date, hours: list[FieldHour]) ->
                 topsoil_moisture_percent=None if top is None else round(top),
                 subsoil_moisture_percent=None if sub is None else round(sub),
                 wind_gust_max_ms=gust,
-                assessments=[
-                    assess_tillage(precip, prev3, sub, soil_temp),
-                    assess_sowing(precip, soil_temp, temp_min, top),
-                    assess_traffic(precip, prev3, top),
-                    assess_spraying(precip, gust, temp_min, temp_max),
-                    assess_harvest(precip),
-                ],
+                observed=observed,
+                assessments=assessments,
             )
         )
     if not days:
@@ -299,12 +397,27 @@ def build_region_summary(locations: list[FieldworkLocation]) -> str:
     return "Az egész térségben kedvező talajművelésre: " + ", ".join(format_run(r) for r in runs) + "."
 
 
-def build_fieldwork(data: dict[str, tuple[date, list[FieldHour]]], fetched_at: datetime) -> FieldworkResponse:
+def build_fieldwork(
+    data: dict[str, tuple[date, list[FieldHour]]],
+    fetched_at: datetime,
+    observations: ObservationResponse | None = None,
+) -> FieldworkResponse:
     names = {l.slug: l.name for l in LOCATIONS}
+    observed = {}
+    if observations is not None:
+        observed = {loc.slug: loc for region in observations.regions for loc in region.locations}
     regions = []
     for region in REGIONS:
         locations = [
-            build_location(names[slug], slug, data[slug][0], data[slug][1]) for slug in region.location_slugs
+            build_location(
+                names[slug],
+                slug,
+                data[slug][0],
+                data[slug][1],
+                observed.get(slug),
+                observations.date if observations is not None else None,
+            )
+            for slug in region.location_slugs
         ]
         regions.append(
             FieldworkRegion(
@@ -355,6 +468,10 @@ async def fetch_fieldwork() -> FieldworkResponse:
         raise WeatherProviderError("Unexpected Open-Meteo multi-location response")
 
     data = {l.slug: parse_field_hours(item) for l, item in zip(LOCATIONS, items)}
-    result = build_fieldwork(data, datetime.now(timezone.utc))
+    try:
+        observations = await fetch_observations()
+    except WeatherProviderError:
+        observations = None
+    result = build_fieldwork(data, datetime.now(timezone.utc), observations)
     _cache = (time.monotonic(), result)
     return result

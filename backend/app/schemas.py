@@ -117,11 +117,18 @@ class DailyResponse(BaseModel):
     regions: list[RegionDaily]
     stale: bool = False
 
+class FieldworkSlot(BaseModel):
+    label: str
+    status: Literal["kedvező", "feltételes", "kedvezőtlen", "nincs adat"]
+    reason: str
+
+
 class FieldworkAssessment(BaseModel):
     activity: Literal["talajművelés", "vetés", "gépek járhatósága", "permetezés", "betakarítás"]
     status: Literal["kedvező", "feltételes", "kedvezőtlen", "nincs adat"]
     reason: str
     threshold: str
+    slots: list[FieldworkSlot] = []
 
 
 class FieldworkDay(BaseModel):
@@ -134,6 +141,7 @@ class FieldworkDay(BaseModel):
     topsoil_moisture_percent: float | None
     subsoil_moisture_percent: float | None
     wind_gust_max_ms: float | None
+    observed: bool = False
     assessments: list[FieldworkAssessment]
 
 

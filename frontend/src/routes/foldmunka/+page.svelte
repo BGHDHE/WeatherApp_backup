@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fetchFieldwork } from "$lib/api";
-  import type { FieldworkDay, FieldworkResponse } from "$lib/types";
+  import type { FieldworkDay, FieldworkResponse, FieldworkSlot } from "$lib/types";
 
   let report: FieldworkResponse | null = $state(null);
   let loading = $state(true);
@@ -39,7 +39,7 @@
     const a = day.assessments.find((x) => x.activity === activity);
     return a ? `${a.status} – ${a.reason}\nKüszöb: ${a.threshold}` : "";
   }
-  type Tip = { x: number; y: number; status: string; reason: string; threshold: string; cls: string };
+  type Tip = { x: number; y: number; status: string; reason: string; threshold: string; cls: string; slots: FieldworkSlot[] };
   let tipState: Tip | null = $state(null);
 
   function showTip(event: Event, day: FieldworkDay, activity: string) {
@@ -48,8 +48,9 @@
     const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const half = 150;
     const x = Math.min(Math.max(r.left + r.width / 2, half + 8), window.innerWidth - half - 8);
-    tipState = { x, y: r.bottom + 8, status: a.status, reason: a.reason, threshold: a.threshold, cls: statusClass(a.status) };
+    tipState = { x, y: r.bottom + 8, status: a.status, reason: a.reason, threshold: a.threshold, cls: statusClass(a.status), slots: a.slots ?? [] };
   }
+  const symbol = (s: string) => (s === "kedvező" ? "✓" : s === "kedvezőtlen" ? "✕" : s === "feltételes" ? "~" : "?");
   const hideTip = () => (tipState = null);
   const status = (day: FieldworkDay, activity: string) =>
     day.assessments.find((x) => x.activity === activity)?.status ?? "nincs adat";
@@ -114,7 +115,7 @@
                       <tr>
                         <th scope="col">Nap</th>
                         {#each loc.days as day (day.date)}
-                          <th scope="col">{weekday.format(localDate(day.date))}<br /><small>{dayMonth.format(localDate(day.date))}</small></th>
+                          <th scope="col">{weekday.format(localDate(day.date))}<br /><small>{dayMonth.format(localDate(day.date))}</small>{#if day.observed}<br /><small title="Mért állomásadatokból (odp.met.hu)"></small>{/if}</th>
                         {/each}
                       </tr>
                     </thead>
@@ -127,12 +128,7 @@
                           {/each}
                         </tr>
                       {/each}
-                      <tr><th scope="row">Csapadék (mm)</th>{#each loc.days as day (day.date)}<td>{n(day.precipitation_mm)}</td>{/each}</tr>
-                      <tr><th scope="row">Előző 3 nap (mm)</th>{#each loc.days as day (day.date)}<td>{n(day.precipitation_prev_3d_mm)}</td>{/each}</tr>
-                      <tr><th scope="row">Felső réteg (%)</th>{#each loc.days as day (day.date)}<td>{n(day.topsoil_moisture_percent, "", 0)}</td>{/each}</tr>
-                      <tr><th scope="row">Alsó réteg (%)</th>{#each loc.days as day (day.date)}<td>{n(day.subsoil_moisture_percent, "", 0)}</td>{/each}</tr>
-                      <tr><th scope="row">Talaj (°C)</th>{#each loc.days as day (day.date)}<td>{n(day.soil_temperature_c, "", 0)}</td>{/each}</tr>
-                      <tr><th scope="row">Min / max (°C)</th>{#each loc.days as day (day.date)}<td>{n(day.temp_min_c, "", 0)} / {n(day.temp_max_c, "", 0)}</td>{/each}</tr>
+                      
                     </tbody>
                   </table>
                 </div>
@@ -147,7 +143,17 @@
   {#if tipState}
     <div class="tip" style="left: {tipState.x}px; top: {tipState.y}px" aria-hidden="true">
       <div class="tip-status {tipState.cls}">{tipState.status}</div>
-      <p class="tip-reason">{tipState.reason}</p>
+      {#if tipState.slots.length}
+        <ul class="tip-slots">
+          {#each tipState.slots as slot (slot.label)}
+            <li>
+              <span class="window-dot {statusClass(slot.status)}">{symbol(slot.status)}</span>
+              <span class="tip-slot-time">{slot.label} óra</span>
+              <span>{slot.reason}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
   {/if}
 </div>
