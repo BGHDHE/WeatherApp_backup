@@ -202,7 +202,7 @@
     const windiest = locations.reduce((current, location) =>
       (location.wind_max_ms ?? -Infinity) > (current.wind_max_ms ?? -Infinity) ? location : current,
     );
-    const allStations = [...locations.flatMap((location) => location.stations)];
+    const allStations = locations.flatMap((location) => location.stations ?? []);
     const stations = [...new Map(allStations.map((station) => [station.name, station])).values()];
     return {
       ...locations[0],
@@ -212,7 +212,13 @@
           ? "interpoláció"
           : "legközelebbi állomás",
       stations,
-      wind_stations: [...new Map(locations.flatMap((location) => location.wind_stations).map((station) => [station.name, station])).values()],
+      wind_stations: [
+        ...new Map(
+          locations
+            .flatMap((location) => location.wind_stations ?? [])
+            .map((station) => [station.name, station]),
+        ).values(),
+      ],
       latest_time: highestTime(locations.map((location) => location.latest_time)),
       latest_temp_c: average(locations.map((location) => location.latest_temp_c)),
       latest_humidity_percent: average(locations.map((location) => location.latest_humidity_percent)),

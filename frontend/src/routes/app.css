@@ -108,6 +108,7 @@ footer { padding: 19px 0 23px; border-top: 1px solid #e3e9e3; color: #8a958d; fo
 .week-day strong { color: #1f4634; font-size: 14px; }
 .week-min { color: #95a39a; }
 .week-rain { color: #5a7184; font-size: 10px; }
+.week-wind { color: #60786b; font-size: 10px; overflow-wrap: anywhere; }
 @media (max-width: 620px) {
   .region-card { padding: 16px; }
   .week-strip { display: flex; overflow-x: auto; gap: 6px; padding-bottom: 4px; }

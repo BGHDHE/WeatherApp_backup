@@ -41,6 +41,10 @@
     return day.precipitation_max_mm < 0.5 ? "száraz" : `${Math.round(day.precipitation_max_mm)} mm`;
   }
 
+  function gust(day: OutlookDay): string {
+    return day.wind_gust_max_ms === null ? "–" : `${Math.round(day.wind_gust_max_ms)} m/s`;
+  }
+
   const conditionSymbol: Record<string, string> = {
     száraz: "☀",
     csapadék: "☂",
@@ -118,6 +122,7 @@
                   <strong>{temp(day.temp_max_c)}</strong>
                   <span class="week-min">{temp(day.temp_min_c)}</span>
                   <span class="week-rain">{rain(day)}</span>
+                  <span class="week-wind" aria-label={`Maximális széllökés: ${gust(day)}`}>Széllökés {gust(day)}</span>
                 </div>
               {/each}
             </div>          </section>
