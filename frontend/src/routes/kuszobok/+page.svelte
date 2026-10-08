@@ -51,14 +51,14 @@
 </script>
 
 <svelte:head>
-  <title>Angelika Farm AgroSense</title>
+  <title>Angelika Farm Időjárás</title>
 </svelte:head>
 
 <div class="app-shell">
   <header class="topbar">
-    <a class="brand" href="/" aria-label="AgroSense főoldal">
+    <a class="brand" href="/" aria-label="Időjárás főoldal">
       <span class="brand-mark" aria-hidden="true">A</span>
-      <span>Angelika Farm AgroSense<span class="brand-dot">.</span></span>
+      <span>Angelika Farm Időjárás<span class="brand-dot">.</span></span>
     </a>
     <nav class="topnav" aria-label="Főmenü">
       <a href="/napi">Napi kimutatás</a>

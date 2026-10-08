@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fetchDaily, fetchObservations } from "$lib/api";
-  import type { DailyResponse, LocationDaily, LocationObservation, ObservationResponse } from "$lib/types";
+  import type {
+    DailyResponse,
+    LocationDaily,
+    LocationObservation,
+    ObservationResponse,
+  } from "$lib/types";
 
   let report: DailyResponse | null = $state(null);
   let loading = $state(true);
@@ -85,6 +90,161 @@
     return null;
   }
 
+  const combinedLocationGroups = [
+    { name: "Hort–Gyöngyös", slugs: ["hort", "gyongyos"] },
+    { name: "Kál–Kompolt", slugs: ["kal", "kompolt"] },
+  ];
+
+  function displayRegions<
+    TLocation extends { name: string; slug: string },
+    TRegion extends { name: string; slug: string; locations: TLocation[] },
+  >(regions: TRegion[]): TRegion[] {
+    const hortRegion = regions.find((region) => region.slug === "hort-gyongyos");
+    const kalRegion = regions.find((region) => region.slug === "kal-kompolt-heves");
+    if (!hortRegion || !kalRegion) return regions;
+
+    return regions
+      .filter((region) => region.slug !== hortRegion.slug)
+      .map((region) =>
+        region.slug === kalRegion.slug
+          ? {
+              ...region,
+              name: "Kál–Heves–Gyöngyös",
+              locations: [...region.locations, ...hortRegion.locations],
+            }
+          : region,
+      );
+  }
+
+  function groupLocations<T extends { name: string; slug: string }>(
+    locations: T[],
+  ): { key: string; name: string; locations: T[] }[] {
+    const bySlug = new Map(locations.map((location) => [location.slug, location]));
+    const grouped = new Set<string>();
+    const result: { key: string; name: string; locations: T[] }[] = [];
+
+    for (const location of locations) {
+      if (grouped.has(location.slug)) continue;
+      const pair = combinedLocationGroups.find((candidate) =>
+        candidate.slugs.includes(location.slug) && candidate.slugs.every((slug) => bySlug.has(slug)),
+      );
+      if (!pair) {
+        result.push({ key: location.slug, name: location.name, locations: [location] });
+        continue;
+      }
+
+      const members = pair.slugs.map((slug) => bySlug.get(slug)).filter((item): item is T => item !== undefined);
+      members.forEach((item) => grouped.add(item.slug));
+      result.push({ key: pair.slugs.join("-"), name: pair.name, locations: members });
+    }
+    return result;
+  }
+
+  function average(values: (number | null)[]): number | null {
+    const known = values.filter((value): value is number => value !== null);
+    return known.length === 0 ? null : known.reduce((sum, value) => sum + value, 0) / known.length;
+  }
+
+  function lowest(values: (number | null)[]): number | null {
+    const known = values.filter((value): value is number => value !== null);
+    return known.length === 0 ? null : Math.min(...known);
+  }
+
+  function highest(values: (number | null)[]): number | null {
+    const known = values.filter((value): value is number => value !== null);
+    return known.length === 0 ? null : Math.max(...known);
+  }
+
+  const frostRanks = { "nincs adat": 0, nincs: 1, alacsony: 2, mérsékelt: 3, magas: 4 };
+
+  function combinedFrost<T extends { frost_level: keyof typeof frostRanks }>(locations: T[]): T["frost_level"] {
+    return locations.reduce(
+      (highestRisk, location) =>
+        frostRanks[location.frost_level] > frostRanks[highestRisk] ? location.frost_level : highestRisk,
+      locations[0].frost_level,
+    );
+  }
+
+  function mergeDaily(locations: LocationDaily[]): LocationDaily {
+    const windiest = locations.reduce((current, location) =>
+      (location.wind_max_ms ?? -Infinity) > (current.wind_max_ms ?? -Infinity) ? location : current,
+    );
+    const gustiest = locations.reduce((current, location) =>
+      (location.gust_max_ms ?? -Infinity) > (current.gust_max_ms ?? -Infinity) ? location : current,
+    );
+    const first = locations[0];
+    const windows = [...new Set(locations.map((location) => location.precip_window).filter(Boolean))];
+    const precipitationProbability = average(locations.map((location) => location.precip_probability_max));
+    return {
+      ...first,
+      past_temp_min_c: lowest(locations.map((location) => location.past_temp_min_c)),
+      past_temp_max_c: highest(locations.map((location) => location.past_temp_max_c)),
+      past_precip_mm: average(locations.map((location) => location.past_precip_mm)),
+      past_gust_max_ms: highest(locations.map((location) => location.past_gust_max_ms)),
+      today_temp_min_c: lowest(locations.map((location) => location.today_temp_min_c)),
+      today_temp_max_c: highest(locations.map((location) => location.today_temp_max_c)),
+      precip_today_mm: average(locations.map((location) => location.precip_today_mm)),
+      precip_window: windows.length === 1 ? windows[0] : null,
+      precip_probability_max: precipitationProbability === null ? null : Math.round(precipitationProbability),
+      wind_max_ms: average(locations.map((location) => location.wind_max_ms)),
+      wind_direction: windiest.wind_direction,
+      gust_max_ms: highest(locations.map((location) => location.gust_max_ms)),
+      gust_time: gustiest.gust_time,
+      frost_level: combinedFrost(locations),
+      frost_min_temp_c: lowest(locations.map((location) => location.frost_min_temp_c)),
+      soil_temperature_c: average(locations.map((location) => location.soil_temperature_c)),
+      soil_moisture_percent: average(locations.map((location) => location.soil_moisture_percent)),
+      evapotranspiration_mm: average(locations.map((location) => location.evapotranspiration_mm)),
+    };
+  }
+
+  function mergeObservations(locations: LocationObservation[]): LocationObservation {
+    const windiest = locations.reduce((current, location) =>
+      (location.wind_max_ms ?? -Infinity) > (current.wind_max_ms ?? -Infinity) ? location : current,
+    );
+    const allStations = [...locations.flatMap((location) => location.stations)];
+    const stations = [...new Map(allStations.map((station) => [station.name, station])).values()];
+    return {
+      ...locations[0],
+      method: locations.every((location) => location.method === "nincs adat")
+        ? "nincs adat"
+        : locations.some((location) => location.method === "interpoláció")
+          ? "interpoláció"
+          : "legközelebbi állomás",
+      stations,
+      wind_stations: [...new Map(locations.flatMap((location) => location.wind_stations).map((station) => [station.name, station])).values()],
+      latest_time: highestTime(locations.map((location) => location.latest_time)),
+      latest_temp_c: average(locations.map((location) => location.latest_temp_c)),
+      latest_humidity_percent: average(locations.map((location) => location.latest_humidity_percent)),
+      latest_wind_ms: average(locations.map((location) => location.latest_wind_ms)),
+      past_temp_min_c: lowest(locations.map((location) => location.past_temp_min_c)),
+      past_temp_max_c: highest(locations.map((location) => location.past_temp_max_c)),
+      past_precip_mm: average(locations.map((location) => location.past_precip_mm)),
+      past_gust_max_ms: highest(locations.map((location) => location.past_gust_max_ms)),
+      today_temp_min_c: lowest(locations.map((location) => location.today_temp_min_c)),
+      today_temp_max_c: highest(locations.map((location) => location.today_temp_max_c)),
+      precip_today_mm: average(locations.map((location) => location.precip_today_mm)),
+      wind_max_ms: average(locations.map((location) => location.wind_max_ms)),
+      wind_direction: windiest.wind_direction,
+      gust_max_ms: highest(locations.map((location) => location.gust_max_ms)),
+      gust_time: locations.reduce((current, location) =>
+        (location.gust_max_ms ?? -Infinity) > (current.gust_max_ms ?? -Infinity) ? location : current,
+      ).gust_time,
+      frost_level: combinedFrost(locations),
+      frost_min_temp_c: lowest(locations.map((location) => location.frost_min_temp_c)),
+    };
+  }
+
+  function highestTime(values: (string | null)[]): string | null {
+    return values.filter((value): value is string => value !== null).sort().at(-1) ?? null;
+  }
+
+  function modelLocationsFor(group: LocationObservation[]): LocationDaily[] {
+    return group
+      .map((location) => getModelLocation(location.slug))
+      .filter((location): location is LocationDaily => location !== null);
+  }
+
   const timeFormatter = new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" });
 
   function latest(l: LocationObservation): string {
@@ -107,14 +267,14 @@
 </script>
 
 <svelte:head>
-  <title>Angelika Farm AgroSense</title>
+  <title>Angelika Farm Időjárás</title>
 </svelte:head>
 
 <div class="app-shell">
   <header class="topbar">
-    <a class="brand" href="/" aria-label="AgroSense főoldal">
+    <a class="brand" href="/" aria-label="Időjárás főoldal">
       <span class="brand-mark" aria-hidden="true">A</span>
-      <span>Angelika Farm AgroSense<span class="brand-dot">.</span></span>
+      <span>Angelika Farm Időjárás<span class="brand-dot">.</span></span>
     </a>
     <nav class="topnav" aria-label="Főmenü">
       <a href="/napi" aria-current="page">Napi kimutatás</a>
@@ -151,14 +311,15 @@
           {#if observed.as_of}<span>Legfrissebb mérés: {timeFormatter.format(new Date(observed.as_of))}</span>{/if}
         </div>
 
-        {#each observed.regions as region (region.slug)}
+        {#each displayRegions(observed.regions) as region (region.slug)}
           <section class="daily-region" aria-labelledby="o-{region.slug}">
             <h2 id="o-{region.slug}" class="daily-region-title">{region.name}</h2>
             <div class="daily-grid">
-              {#each region.locations as l (l.slug)}
-                {@const modelLoc = getModelLocation(l.slug)}
+              {#each groupLocations(region.locations) as group (group.key)}
+                {@const l = mergeObservations(group.locations)}
+                {@const modelLocations = modelLocationsFor(group.locations)}
                 <article class="daily-card">
-                  <h3>{l.name}</h3>
+                  <h3>{group.name}</h3>
                   {#if l.method === "nincs adat"}
                     <p class="fw-week">Nincs elég közeli (20 km-en belüli) mérőállomás.</p>
                   {:else}
@@ -171,7 +332,7 @@
                       <div class="frost-line"><dt>Hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>
                       <div class="frost-line"><dt>Csapadék, mért (24 h)</dt><dd>{num(l.past_precip_mm, "mm")}</dd></div>
                       <div class="frost-line"><dt>Csapadék ma</dt><dd>{num(l.precip_today_mm, "mm")}</dd></div>
-                      <div class="frost-line"><dt>Szél</dt><dd>{modelLoc ? wind(modelLoc) : NA}</dd></div>
+                      <div class="frost-line"><dt>Szél</dt><dd>{modelLocations.length ? wind(mergeDaily(modelLocations)) : NA}</dd></div>
                       <div class="frost-line"><dt>Fagy</dt><dd class={frostClass(l.frost_level)}>{frost(l)}</dd></div>
                     </dl>
                   {/if}
@@ -197,13 +358,14 @@
         <span>Frissítve: {updatedFormatter.format(new Date(report.fetched_at))}</span>
       </div>
 
-      {#each report.regions as region (region.slug)}
+      {#each displayRegions(report.regions) as region (region.slug)}
         <section class="daily-region" aria-labelledby="r-{region.slug}">
           <h2 id="r-{region.slug}" class="daily-region-title">{region.name}</h2>
           <div class="daily-grid">
-            {#each region.locations as l (l.slug)}
+            {#each groupLocations(region.locations) as group (group.key)}
+              {@const l = mergeDaily(group.locations)}
               <article class="daily-card">
-                <h3>{l.name}</h3>
+                <h3>{group.name}</h3>
                 <dl>
                   <div class="frost-line"><dt>Modellezett hőmérséklet (24 h)</dt><dd>{range(l.past_temp_min_c, l.past_temp_max_c)}</dd></div>
                   <div class="frost-line"><dt>Várható hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>

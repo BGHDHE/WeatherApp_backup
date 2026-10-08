@@ -1,7 +1,6 @@
 {
-  "name": "Agromet Időjárás",
-  "short_name": "Agromet",
-  "description": "Helyi időjárás-előrejelzés és fagyveszély-jelzés.",
+  "name": "Angelika Farm Időjárás",
+  "short_name": "Angelika Farm Időjárás",
   "lang": "hu",
   "start_url": "/",
   "display": "standalone",
