@@ -77,7 +77,7 @@ export interface DailyResponse {
   stale: boolean;
 }
 
-export type FieldworkStatus = "kedvező" | "feltételes" | "kedvezőtlen" | "nincs adat";
+export type FieldworkStatus = "kedvező" | "megoldható" | "feltételes" | "kedvezőtlen" | "nincs adat";
 
 export interface FieldworkSlot {
   label: string;

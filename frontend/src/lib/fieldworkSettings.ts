@@ -43,21 +43,24 @@ function runs(dates: string[]): string[][] {
 
 const formatRun = (r: string[]) => (r.length === 1 ? dayName(r[0]) : `${dayName(r[0])}–${dayName(r[r.length - 1])}`);
 
-const favourable = (days: FieldworkDay[], activity: string) =>
-  days
-    .filter((d) => d.assessments.find((a) => a.activity === activity)?.status === "kedvező")
-    .map((d) => d.date);
+const daysWith = (days: FieldworkDay[], activity: string, status: string) =>
+  days.filter((d) => d.assessments.find((a) => a.activity === activity)?.status === status).map((d) => d.date);
+
+const favourable = (days: FieldworkDay[], activity: string) => daysWith(days, activity, "kedvező");
 
 export function locationSummary(loc: FieldworkLocation, selected: string[]): string {
   return ACTIVITY_OPTIONS.filter((o) => selected.includes(o.key))
     .map((o) => {
       const r = runs(favourable(loc.days, o.key));
-      if (!r.length) return `A héten nincs ${o.target} kedvező nap.`;
+      const fair = runs(daysWith(loc.days, o.key, "megoldható"));
+      const fairText = fair.length ? ` Megoldható, de nem kedvező: ${fair.map(formatRun).join(", ")}.` : "";
+      if (!r.length) return `A héten nincs ${o.target} kedvező nap.${fairText}`;
       const best = r.reduce((a, b) => (b.length > a.length ? b : a));
       const others = r.filter((x) => x !== best);
       return (
         `${o.target[0].toUpperCase() + o.target.slice(1)} kedvező: ${formatRun(best)}.` +
-        (others.length ? ` További kedvező nap(ok): ${others.map(formatRun).join(", ")}.` : "")
+        (others.length ? ` További kedvező nap(ok): ${others.map(formatRun).join(", ")}.` : "") +
+        fairText
       );
     })
     .join(" ");

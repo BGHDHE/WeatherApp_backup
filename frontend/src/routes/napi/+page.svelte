@@ -372,9 +372,7 @@
               <article class="daily-card">
                 <h3>{group.name}</h3>
                 <dl>
-                  <div class="frost-line"><dt>Modellezett hőmérséklet (24 h)</dt><dd>{range(l.past_temp_min_c, l.past_temp_max_c)}</dd></div>
                   <div class="frost-line"><dt>Várható hőmérséklet ma</dt><dd>{range(l.today_temp_min_c, l.today_temp_max_c)}</dd></div>
-                  <div class="frost-line"><dt>Csapadék, modellezett (24 h)</dt><dd>{num(l.past_precip_mm, "mm")}</dd></div>
                   <div class="frost-line"><dt>Csapadék, várható ma</dt><dd>{rain(l)}</dd></div>
                   <div class="frost-line"><dt>Szél</dt><dd>{wind(l)}</dd></div>
                   <div class="frost-line"><dt>Fagyveszély</dt><dd class={frostClass(l.frost_level)}>{frost(l)}</dd></div>

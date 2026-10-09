@@ -1,3 +1,4 @@
+import math
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -28,6 +29,14 @@ FORECAST_DAYS = 7
 PAST_DAYS = 3
 SLOTS = [(6, 9), (9, 12), (12, 15), (15, 18)]
 SLOT_PRECIP_SCALE = 0.25
+WEEK_AHEAD_DAYS = 6
+INVERSION_DT = thresholds.get("spray.inversion_dt_c")
+INVERSION_MAX_WIND = thresholds.get("spray.inversion_max_wind_ms")
+TILL_FROST = thresholds.get("tillage.frost_c")
+TILL_FROST_CAUTION = thresholds.get("tillage.frost_caution_c")
+SOW_WEEK_WET = thresholds.get("sowing.week_precip_wet_mm")
+SOW_WEEK_DRY = thresholds.get("sowing.week_precip_dry_mm")
+SOW_COOLING = thresholds.get("sowing.soil_cooling_c")
 
 # Kezdeti küszöbök; éles használat előtt agronómussal jóváhagyandók.
 TILL_OK_PRECIP = thresholds.get("tillage.ok_precip_mm")
@@ -46,7 +55,8 @@ TILL_THRESHOLD = (
     f"kedvező: csapadék ≤ {TILL_OK_PRECIP:g} mm, előző 3 nap ≤ {TILL_OK_PREV3:g} mm, "
     f"alsó réteg nedvessége ≤ {TILL_OK_SUBSOIL:g}%, talaj > 0 °C; "
     f"kedvezőtlen: csapadék > {TILL_BAD_PRECIP:g} mm, előző 3 nap > {TILL_BAD_PREV3:g} mm, "
-    f"alsó réteg > {TILL_BAD_SUBSOIL:g}% vagy fagyott talaj"
+    f"alsó réteg > {TILL_BAD_SUBSOIL:g}%, fagyott talaj vagy fagy (≤ {TILL_FROST:g} °C); "
+    f"fagyveszély ≤ {TILL_FROST_CAUTION:g} °C: feltételes"
 )
 TRAFFIC_THRESHOLD = (
     f"kedvező: felső réteg nedvessége ≤ {TRAFFIC_OK_TOPSOIL:g}%, csapadék ≤ {TILL_OK_PRECIP:g} mm, "
@@ -56,7 +66,8 @@ TRAFFIC_THRESHOLD = (
 SOW_THRESHOLD = (
     f"kedvező: talajhőmérséklet ≥ {SOW_OK_SOIL_TEMP:g} °C, nincs fagy, csapadék ≤ {TILL_BAD_PRECIP:g} mm, "
     f"felső réteg ≥ {SOW_DRY_TOPSOIL:g}%; kedvezőtlen: talaj < {SOW_BAD_SOIL_TEMP:g} °C, fagy vagy "
-    f"csapadék > {TILL_BAD_PRECIP:g} mm"
+    f"csapadék > {TILL_BAD_PRECIP:g} mm; feltételes: következő 7 nap csapadéka > {SOW_WEEK_WET:g} mm vagy < {SOW_WEEK_DRY:g} mm, "
+    f"talajhűlés ≥ {SOW_COOLING:g} °C"
 )
 
 
@@ -70,6 +81,36 @@ class FieldHour:
     top: float | None
     sub: float | None
     wind: float | None = None
+    humidity: float | None = None
+    dew_point: float | None = None
+    temp_80m: float | None = None
+
+    @property
+    def delta_t(self) -> float | None:
+        if self.temp is None or self.humidity is None:
+            return None
+        t, rh = self.temp, min(max(self.humidity, 5.0), 99.0)
+        wet_bulb = (
+            t * math.atan(0.151977 * math.sqrt(rh + 8.313659))
+            + math.atan(t + rh)
+            - math.atan(rh - 1.676331)
+            + 0.00391838 * rh**1.5 * math.atan(0.023101 * rh)
+            - 4.686035
+        )
+        return t - wet_bulb
+
+    @property
+    def dew_spread(self) -> float | None:
+        if self.temp is None or self.dew_point is None:
+            return None
+        return self.temp - self.dew_point
+
+    @property
+    def inversion(self) -> bool | None:
+        if self.temp is None or self.temp_80m is None:
+            return None
+        calm = self.wind is None or self.wind <= INVERSION_MAX_WIND
+        return calm and self.temp_80m - self.temp > INVERSION_DT
 
 
 def _num(values: Any, index: int) -> float | None:
@@ -102,6 +143,9 @@ def parse_field_hours(payload: dict[str, Any]) -> tuple[date, list[FieldHour]]:
                 top=_num(hourly.get("soil_moisture_0_to_7cm"), i),
                 sub=_num(hourly.get("soil_moisture_7_to_28cm"), i),
                 wind=_num(hourly.get("wind_speed_10m"), i),
+                humidity=_num(hourly.get("relative_humidity_2m"), i),
+                dew_point=_num(hourly.get("dew_point_2m"), i),
+                temp_80m=_num(hourly.get("temperature_80m"), i),
             )
             for i, raw in enumerate(hourly["time"])
         ]
@@ -148,12 +192,17 @@ def _no_data(activity, threshold) -> FieldworkAssessment:
     return FieldworkAssessment(activity=activity, status="nincs adat", reason="Hiányos adat", threshold=threshold)
 
 
-def assess_tillage(precip, prev3, sub, soil_temp, precip_scale=1.0) -> FieldworkAssessment:
+def assess_tillage(precip, prev3, sub, soil_temp, precip_scale=1.0, temp_min=None) -> FieldworkAssessment:
     if None in (precip, prev3, sub, soil_temp):
         return _no_data("talajművelés", TILL_THRESHOLD)
     bad, caution = [], []
     if soil_temp <= 0:
         bad.append(f"fagyott talaj ({soil_temp:g} °C)")
+    if temp_min is not None:
+        if temp_min <= TILL_FROST:
+            bad.append(f"fagy ({temp_min:g} °C)")
+        elif temp_min <= TILL_FROST_CAUTION:
+            caution.append(f"fagyveszély ({temp_min:g} °C)")
     if sub > TILL_BAD_SUBSOIL:
         bad.append(f"átázott alsó réteg ({sub:g}%)")
     elif sub > TILL_OK_SUBSOIL:
@@ -188,7 +237,9 @@ def assess_traffic(precip, prev3, top, precip_scale=1.0) -> FieldworkAssessment:
     return _verdict("gépek járhatósága", TRAFFIC_THRESHOLD, bad, caution, "A talaj teherbíró, száraz idő várható")
 
 
-def assess_sowing(precip, soil_temp, temp_min, top, precip_scale=1.0) -> FieldworkAssessment:
+def assess_sowing(
+    precip, soil_temp, temp_min, top, precip_scale=1.0, week_precip=None, soil_trend=None
+) -> FieldworkAssessment:
     if None in (precip, soil_temp, temp_min, top):
         return _no_data("vetés", SOW_THRESHOLD)
     bad, caution = [], []
@@ -202,6 +253,13 @@ def assess_sowing(precip, soil_temp, temp_min, top, precip_scale=1.0) -> Fieldwo
         bad.append(f"csapadék {precip:g} mm")
     if top < SOW_DRY_TOPSOIL:
         caution.append(f"száraz felső réteg ({top:g}%)")
+    if week_precip is not None:
+        if week_precip > SOW_WEEK_WET:
+            caution.append(f"csapadékos hét várható ({week_precip:g} mm / 7 nap)")
+        elif week_precip < SOW_WEEK_DRY:
+            caution.append(f"száraz hét várható ({week_precip:g} mm / 7 nap), bizonytalan kelés")
+    if soil_trend is not None and soil_trend <= -SOW_COOLING:
+        caution.append(f"hűlő talaj (következő napokban {soil_trend:+.1f} °C)")
     return _verdict("vetés", SOW_THRESHOLD, bad, caution, "A talajhőmérséklet és a nedvesség megfelelő")
 
 
@@ -224,6 +282,7 @@ def format_run(run: list[date]) -> str:
 
 def combine_slots(results: list[tuple[str, FieldworkAssessment]]) -> FieldworkAssessment:
     """A nap értékelése a 3 órás szakaszokból: mind kedvezőtlen -> kedvezőtlen; mind kedvező -> kedvező;
+    ha van legalább egy kedvező szakasz, de nem mind az -> megoldható (nem kedvező, de kivitelezhető);
     egyébként (legalább egy feltételes vagy kedvezőtlen) feltételes."""
     first = results[0][1]
     slots = [FieldworkSlot(label=label, status=a.status, reason=a.reason) for label, a in results]
@@ -237,12 +296,19 @@ def combine_slots(results: list[tuple[str, FieldworkAssessment]]) -> FieldworkAs
     warn = [s for s in known if s.status == "feltételes"]
     if len(bad) == len(slots):
         status = "kedvezőtlen"
-    elif bad or warn:
-        status = "feltételes"
-    else:
+    elif len(bad) + len(warn) == 0:
         status = "kedvező"
+    elif any(s.status == "kedvező" for s in known):
+        status = "megoldható"
+    else:
+        status = "feltételes"
     if status == "kedvező":
         reason = "Mind a négy időszak (6–18 óra) kedvező"
+    elif status == "megoldható":
+        ok = [s.label for s in known if s.status == "kedvező"]
+        reason = f"Kedvező időszak: {', '.join(ok)} óra; " + "; ".join(
+            f"{s.label} óra: {s.reason}" for s in bad + warn
+        )
     else:
         reason = "; ".join(f"{s.label} óra: {s.reason}" for s in bad + warn)
     return FieldworkAssessment(
@@ -278,6 +344,13 @@ def build_location(
         temp_min = _min(day_hours, "temp")
         gust = _max(day_hours, "gust")
         temp_max = _max(day_hours, "temp")
+        week_days = [by_day[d + timedelta(days=k)] for k in range(7) if by_day.get(d + timedelta(days=k))]
+        week_precip = _sum([h for wd in week_days for h in wd], "precip") if len(week_days) == 7 else None
+        later_soil = [_mean(by_day[d + timedelta(days=k)], "soil_temp") for k in (1, 2, 3) if by_day.get(d + timedelta(days=k))]
+        later_soil = [v for v in later_soil if v is not None]
+        soil_trend = (
+            round(sum(later_soil) / len(later_soil) - soil_temp, 1) if later_soil and soil_temp is not None else None
+        )
         observed = False
         precip_factor = 1.0
         precip_even: float | None = None
@@ -310,6 +383,14 @@ def build_location(
                         temp_max=_max(slot_hours, "temp"),
                         gust=_max(slot_hours, "gust"),
                         wind=_max(slot_hours, "wind"),
+                        humidity=_mean(slot_hours, "humidity"),
+                        delta_t=_mean(slot_hours, "delta_t"),
+                        dew_spread=_min(slot_hours, "dew_spread"),
+                        inversion=(
+                            any(h.inversion for h in slot_hours)
+                            if any(h.inversion is not None for h in slot_hours)
+                            else None
+                        ),
                         soil_temp=_mean(slot_hours, "soil_temp"),
                         top=_mean(slot_hours, "top", 100),
                         sub=_mean(slot_hours, "sub", 100),
@@ -320,13 +401,13 @@ def build_location(
         assessments = [
             combine_slots(
                 [
-                    (label, assess_tillage(v["precip"], prev3, v["sub"], v["soil_temp"], s))
+                    (label, assess_tillage(v["precip"], prev3, v["sub"], v["soil_temp"], s, v["temp_min"]))
                     for label, v in slots
                 ]
             ),
             combine_slots(
                 [
-                    (label, assess_sowing(v["precip"], v["soil_temp"], v["temp_min"], v["top"], s))
+                    (label, assess_sowing(v["precip"], v["soil_temp"], v["temp_min"], v["top"], s, week_precip, soil_trend))
                     for label, v in slots
                 ]
             ),
@@ -335,11 +416,11 @@ def build_location(
             ),
             combine_slots(
                 [
-                    (label, assess_spraying(v["precip"], v["gust"], v["temp_min"], v["temp_max"], s, v["wind"]))
+                    (label, assess_spraying(v["precip"], v["gust"], v["temp_min"], v["temp_max"], s, v["wind"], v["humidity"], v["delta_t"], v["dew_spread"], v["inversion"]))
                     for label, v in slots
                 ]
             ),
-            combine_slots([(label, assess_harvest(v["precip"], s)) for label, v in slots]),
+            combine_slots([(label, assess_harvest(v["precip"], s, v["humidity"])) for label, v in slots]),
         ]
         days.append(
             FieldworkDay(
@@ -451,12 +532,13 @@ async def fetch_fieldwork() -> FieldworkResponse:
         "latitude": ",".join(str(l.latitude) for l in LOCATIONS),
         "longitude": ",".join(str(l.longitude) for l in LOCATIONS),
         "hourly": "temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m,soil_temperature_6cm,"
+        "relative_humidity_2m,dew_point_2m,temperature_80m,"
         "soil_moisture_0_to_7cm,soil_moisture_7_to_28cm",
         "current": "temperature_2m",
         "wind_speed_unit": "ms",
         "timezone": TIMEZONE,
         "past_days": PAST_DAYS,
-        "forecast_days": FORECAST_DAYS,
+        "forecast_days": FORECAST_DAYS + WEEK_AHEAD_DAYS,
     }
     try:
         async with httpx.AsyncClient(timeout=20) as client:

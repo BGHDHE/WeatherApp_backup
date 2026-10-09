@@ -36,7 +36,7 @@
   const n = (v: number | null, unit = "", digits = 1) =>
     v === null ? NA : `${v.toLocaleString("hu-HU", { maximumFractionDigits: digits })}${unit ? " " + unit : ""}`;
   const statusClass = (s: string) =>
-    ({ kedvező: "window-ok", feltételes: "window-warn", kedvezőtlen: "window-bad" })[s] ?? "window-na";
+    ({ kedvező: "window-ok", megoldható: "window-fair", feltételes: "window-warn", kedvezőtlen: "window-bad" })[s] ?? "window-na";
   const label = (a: string) => a[0].toUpperCase() + a.slice(1);
 
   function tip(day: FieldworkDay, activity: string): string {
@@ -65,7 +65,8 @@
     tipEl.style.top = `${Math.max(gap, y)}px`;
     tipEl.style.visibility = "visible";
   });
-  const symbol = (s: string) => (s === "kedvező" ? "✓" : s === "kedvezőtlen" ? "✕" : s === "feltételes" ? "~" : "?");
+  const symbol = (s: string) =>
+    ({ kedvező: "✓", megoldható: "?", feltételes: "~", kedvezőtlen: "✕" })[s] ?? "–";
   const hideTip = () => (tipState = null);
   const status = (day: FieldworkDay, activity: string) =>
     day.assessments.find((x) => x.activity === activity)?.status ?? "nincs adat";
@@ -113,6 +114,13 @@
       </div>
 
 
+      <p class="fw-legend" aria-label="Jelmagyarázat">
+        <span><span class="window-dot window-ok">✓</span> kedvező</span>
+        <span><span class="window-dot window-fair">?</span> megoldható, de nem kedvező</span>
+        <span><span class="window-dot window-warn">~</span> feltételes</span>
+        <span><span class="window-dot window-bad">✕</span> kedvezőtlen</span>
+      </p>
+
       {#each report.regions as region (region.slug)}
         <section class="daily-region" aria-labelledby="fw-{region.slug}">
           <h2 id="fw-{region.slug}" class="daily-region-title">{region.name}</h2>
@@ -139,7 +147,7 @@
                         <tr>
                           <th scope="row">{label(activity)}</th>
                           {#each loc.days as day (day.date)}
-                            <td><button type="button" class="window-dot dot-btn {statusClass(status(day, activity))}" aria-label={tip(day, activity).replace("\n", ". ")} onmouseenter={(e) => showTip(e, day, activity)} onmouseleave={hideTip} onfocus={(e) => showTip(e, day, activity)} onblur={hideTip}>{status(day, activity) === "kedvező" ? "✓" : status(day, activity) === "kedvezőtlen" ? "✕" : status(day, activity) === "feltételes" ? "~" : "?"}</button></td>
+                            <td><button type="button" class="window-dot dot-btn {statusClass(status(day, activity))}" aria-label={tip(day, activity).replace("\n", ". ")} onmouseenter={(e) => showTip(e, day, activity)} onmouseleave={hideTip} onfocus={(e) => showTip(e, day, activity)} onblur={hideTip}>{symbol(status(day, activity))}</button></td>
                           {/each}
                         </tr>
                       {/each}

@@ -126,7 +126,7 @@ class FieldworkSlot(BaseModel):
 
 class FieldworkAssessment(BaseModel):
     activity: Literal["talajművelés", "vetés", "gépek járhatósága", "permetezés", "betakarítás"]
-    status: Literal["kedvező", "feltételes", "kedvezőtlen", "nincs adat"]
+    status: Literal["kedvező", "megoldható", "feltételes", "kedvezőtlen", "nincs adat"]
     reason: str
     threshold: str
     slots: list[FieldworkSlot] = []

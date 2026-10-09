@@ -80,7 +80,7 @@ def test_day_status_is_built_from_time_slots():
     harvest = next(a for a in day.assessments if a.activity == "betakarítás")
     assert [s.label for s in harvest.slots] == ["6–9", "9–12", "12–15", "15–18"]
     assert [s.status for s in harvest.slots] == ["kedvező", "kedvezőtlen", "kedvező", "kedvező"]
-    assert harvest.status == "feltételes" and "9–12" in harvest.reason
+    assert harvest.status == "megoldható" and "9–12" in harvest.reason
     clear = {d.date: d for d in loc.days}[date(2026, 10, 9)]
     assert all(a.status == "kedvező" and len(a.slots) == 4 for a in clear.assessments)
 

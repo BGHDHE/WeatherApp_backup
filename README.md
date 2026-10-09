@@ -82,7 +82,7 @@ Sikeres Open-Meteo lekérés után az /api/outlook és /api/daily válasza SQLit
 
 ## Földmunka
 
-`GET /api/fieldwork` – 7 napos, településenkénti és térségi elemzés: talajművelés, vetés, gépek járhatósága, permetezés és betakarítás naponta (kedvező / feltételes / kedvezőtlen / nincs adat, okkal és küszöbbel), a csapadék, az előző 3 nap csapadéka, a felső (0–7 cm) és alsó (7–28 cm) talajnedvesség, talajhőmérséklet és hőmérséklet. Településenként a leghosszabb kedvező talajmunka-ablak, térségenként a mindenhol kedvező napok. Szabályok és küszöbök: `backend/app/services/fieldwork.py` és `decisions.py` (permetezés: csapadék, széllökés, hőmérséklet; betakarítás: csapadék; kezdeti becslések, agronómussal jóváhagyandók; modelladat, nem helyszíni mérés). 30 perces cache, SQLite-pillanatkép (`stale`). Frontend: `/foldmunka`.
+`GET /api/fieldwork` – 7 napos, településenkénti és térségi elemzés: talajművelés, vetés, gépek járhatósága, permetezés és betakarítás naponta (kedvező / feltételes / kedvezőtlen / nincs adat, okkal és küszöbbel), a csapadék, az előző 3 nap csapadéka, a felső (0–7 cm) és alsó (7–28 cm) talajnedvesség, talajhőmérséklet és hőmérséklet. Településenként a leghosszabb kedvező talajmunka-ablak, térségenként a mindenhol kedvező napok. Szabályok és küszöbök: `backend/app/services/fieldwork.py` és `decisions.py` (permetezés: csapadék, szél, széllökés, hőmérséklet, páratartalom, harmat, Delta T, inverzió; betakarítás: csapadék, páratartalom; talajművelés: fagy is; vetés: a következő 7 nap csapadéka és a talajhő trendje is; kezdeti becslések, agronómussal jóváhagyandók; modelladat, nem helyszíni mérés). 30 perces cache, SQLite-pillanatkép (`stale`). Frontend: `/foldmunka`.
 
 ## áüszöbök
 
